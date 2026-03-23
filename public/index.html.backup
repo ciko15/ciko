@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment Management Dashboard</title>
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="cabang-styles.css">
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Login Modal -->
+  <div class="login-modal hidden" id="loginModal">
+    <div class="login-container">
+      <div class="login-header">
+        <img src="icon.png" alt="Logo" class="login-logo">
+        <h2>Equipment Management</h2>
+        <p>Airport Navigation System</p>
+      </div>
+      <form id="loginForm" autocomplete="off">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" autocomplete="username" required placeholder="Enter username">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="Enter password">
+        </div>
+        <div class="form-group">
+          <label for="captchaAnswer">Captcha</label>
+          <div class="captcha-container">
+            <span id="captchaQuestion" class="captcha-question">Loading...</span>
+            <input type="text" id="captchaAnswer" name="captcha" autocomplete="off" required placeholder="Enter answer" style="margin-top: 8px;">
+          </div>
+        </div>
+        <input type="hidden" id="captchaId">
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fas fa-sign-in-alt"></i> Login
+        </button>
+      </form>
+      <div class="login-info">
+        <p><strong>Demo Accounts:</strong></p>
+        <p>Admin: admin / admin123</p>
+        <p>Pusat: pusat / pusat123</p>
+        <p>Teknisi: teknisi_jayapura / teknisi123</p>
+        <p>User: user / tester123 (NEW)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Public Dashboard (No Login) -->
+  <div class="public-dashboard" id="publicDashboard">
+    <div class="public-header">
+      <div class="logo-container">
+        <img src="icon.png" alt="Logo" class="sidebar-logo">
+        <h2>Technical Operation Center</h2>
+      </div>
+      <button class="btn btn-primary" id="loginBtn">
+        <i class="fas fa-sign-in-alt"></i> Login
+      </button>
+    </div>
+    <div class="public-content">
+      <div class="public-stats">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-tools"></i></div>
+          <div class="stat-info">
+            <h3>Total Equipment</h3>
+            <p class="stat-number" id="publicTotalEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon available"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info">
+            <h3>Normal</h3>
+            <p class="stat-number" id="publicNormalEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon in-use"><i class="fas fa-exclamation-triangle"></i></div>
+          <div class="stat-info">
+            <h3>Warning</h3>
+            <p class="stat-number" id="publicWarningEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon maintenance"><i class="fas fa-times-circle"></i></div>
+          <div class="stat-info">
+            <h3>Alert</h3>
+            <p class="stat-number" id="publicAlertEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon disconnect"><i class="fas fa-unlink"></i></div>
+          <div class="stat-info">
+            <h3>Disconnect</h3>
+            <p class="stat-number" id="publicDisconnectEquipment">0</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card map-card">
+        <div class="card-header">
+          <h2><i class="fas fa-map-marked-alt"></i> Airport Equipment Map - Indonesia</h2>
+          <div class="map-legend">
+            <span class="legend-item"><span class="legend-dot normal"></span> Normal</span>
+            <span class="legend-item"><span class="legend-dot warning"></span> Warning</span>
+            <span class="legend-item"><span class="legend-dot alert"></span> Alert</span>
+            <span class="legend-item"><span class="legend-dot disconnect"></span> Disconnect</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="publicMapContainer" class="map-container"></div>
+        </div>
+      </div>
+
+      <!-- Equipment by Category - Public View -->
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-chart-pie"></i> Equipment by Category</h2>
+        </div>
+        <div class="card-body">
+          <div class="category-stats" id="publicCategoryStats">
+            <div class="category-item">
+              <div class="category-icon" style="background: #3b82f6;"><i class="fas fa-tower-broadcast"></i></div>
+              <div class="category-info">
+                <h4>Communication</h4>
+                <p id="publicCommCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #10b981;"><i class="fas fa-compass"></i></div>
+              <div class="category-info">
+                <h4>Navigation</h4>
+                <p id="publicNavCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #f59e0b;"><i class="fas fa-satellite-dish"></i></div>
+              <div class="category-info">
+                <h4>Surveillance</h4>
+                <p id="publicSurvCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #8b5cf6;"><i class="fas fa-server"></i></div>
+              <div class="category-info">
+                <h4>Data Processing</h4>
+                <p id="publicDataCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #ef4444;"><i class="fas fa-bolt"></i></div>
+              <div class="category-info">
+                <h4>Support</h4>
+                <p id="publicSupportCount">0</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logout Confirmation Modal -->
+  <div class="modal-overlay hidden" id="logoutModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-sign-out-alt"></i> Confirm Logout</h3>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to logout?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelLogout">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+        <button class="btn btn-danger" id="confirmLogout">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipment Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="equipmentModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-tools"></i> <span id="modalFormTitle">Add New Equipment</span></h3>
+        <button class="modal-close" id="closeEquipmentModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="equipmentForm" autocomplete="off">
+          <input type="hidden" id="equipmentId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentName">Equipment Name</label>
+              <input type="text" id="equipmentName" name="equipmentName" autocomplete="off" required placeholder="Enter equipment name">
+            </div>
+            <div class="form-group">
+              <label for="equipmentCode">Code</label>
+              <input type="text" id="equipmentCode" name="equipmentCode" autocomplete="off" required placeholder="COM-001">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentCategory">Category</label>
+              <select id="equipmentCategory" name="equipmentCategory" required>
+                <option value="">Select Category</option>
+                <option value="Communication">Communication</option>
+                <option value="Navigation">Navigation</option>
+                <option value="Surveillance">Surveillance</option>
+                <option value="Data Processing">Data Processing</option>
+                <option value="Support">Support</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="equipmentAirport">Airport</label>
+              <select id="equipmentAirport" name="equipmentAirport" required>
+                <option value="">Select Airport</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentStatus">Status</label>
+              <select id="equipmentStatus" name="equipmentStatus" required>
+                <option value="Normal">Normal</option>
+                <option value="Warning">Warning</option>
+                <option value="Alert">Alert</option>
+                <option value="Disconnect">Disconnect</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="equipmentDescription">Description</label>
+            <textarea id="equipmentDescription" name="equipmentDescription" rows="2" autocomplete="off" placeholder="Enter description"></textarea>
+          </div>
+          
+          <!-- Connection Method Configuration -->
+          <div class="connection-config-section">
+            <h4><i class="fas fa-plug"></i> Connection Method</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="connectionMethod">Connection Type</label>
+                <select id="connectionMethod" name="connectionMethod">
+                  <option value="snmp">SNMP (Simple Network Management Protocol)</option>
+                  <option value="json">JSON File / API</option>
+                  <option value="serial">Serial Port (RS232/RS485)</option>
+                  <option value="tcp_serial">TCP-to-Serial Bridge (Serial via LAN)</option>
+                  <option value="tcp">TCP/IP Custom</option>
+                  <option value="mqtt">MQTT Broker</option>
+                  <option value="modbus">Modbus TCP/RTU</option>
+                </select>
+              </div>
+              <div class="form-group" id="connectionTemplateGroup">
+                <label for="connectionTemplate">Device Template</label>
+                <select id="connectionTemplate" name="connectionTemplate">
+                  <option value="">Select Template</option>
+                  <option value="moxa_ioThinx_4150">MOXA ioThinx 4150</option>
+                  <option value="generic_snmp">Generic SNMP Device</option>
+                  <option value="radar_system">Radar System</option>
+                  <option value="generic_json">Generic JSON Device</option>
+                  <option value="generic_modbus">Generic Modbus Device</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- SNMP Fields -->
+            <div class="connection-fields" id="snmpFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="snmpIP">IP Address</label>
+                  <input type="text" id="snmpIP" name="snmpIP" autocomplete="off" placeholder="10.18.141.202">
+                </div>
+                <div class="form-group">
+                  <label for="snmpPort">Port</label>
+                  <input type="number" id="snmpPort" name="snmpPort" autocomplete="off" placeholder="161" value="161">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="snmpCommunity">Community</label>
+                  <input type="text" id="snmpCommunity" name="snmpCommunity" autocomplete="off" placeholder="public" value="public">
+                </div>
+              </div>
+            </div>
+            
+            <!-- JSON/API Fields -->
+            <div class="connection-fields" id="jsonFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="jsonURL">API URL / File Path</label>
+                  <input type="text" id="jsonURL" name="jsonURL" autocomplete="off" placeholder="http://192.168.1.100/api/data or /path/to/file.json">
+                </div>
+                <div class="form-group">
+                  <label for="jsonInterval">Polling Interval (seconds)</label>
+                  <input type="number" id="jsonInterval" name="jsonInterval" autocomplete="off" placeholder="30" value="30">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="jsonAuth">Authentication</label>
+                  <select id="jsonAuth" name="jsonAuth">
+                    <option value="none">None</option>
+                    <option value="basic">Basic Auth</option>
+                    <option value="bearer">Bearer Token</option>
+                  </select>
+                </div>
+                <div class="form-group" id="jsonAuthField" style="display: none;">
+                  <label for="jsonAuthValue">Auth Value</label>
+                  <input type="text" id="jsonAuthValue" name="jsonAuthValue" autocomplete="off" placeholder="token or credentials">
+                </div>
+              </div>
+            </div>
+            
+            <!-- Serial Fields -->
+            <div class="connection-fields" id="serialFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="serialPort">Port</label>
+                  <input type="text" id="serialPort" name="serialPort" autocomplete="off" placeholder="/dev/ttyUSB0 or COM1">
+                </div>
+                <div class="form-group">
+                  <label for="serialBaud">Baud Rate</label>
+                  <select id="serialBaud" name="serialBaud">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="serialDataBits">Data Bits</label>
+                  <select id="serialDataBits" name="serialDataBits">
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="serialStopBits">Stop Bits</label>
+                  <select id="serialStopBits" name="serialStopBits">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- TCP-to-Serial Bridge Fields -->
+            <div class="connection-fields" id="tcpSerialFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpSerialBridgeIP">Bridge IP Address</label>
+                  <input type="text" id="tcpSerialBridgeIP" name="tcpSerialBridgeIP" autocomplete="off" placeholder="192.168.1.100">
+                </div>
+                <div class="form-group">
+                  <label for="tcpSerialBridgePort">Bridge Port</label>
+                  <input type="number" id="tcpSerialBridgePort" name="tcpSerialBridgePort" autocomplete="off" placeholder="9000" value="9000">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpSerialRemotePort">Remote Serial Port</label>
+                  <input type="text" id="tcpSerialRemotePort" name="tcpSerialRemotePort" autocomplete="off" placeholder="/dev/ttyUSB0 or COM1">
+                </div>
+                <div class="form-group">
+                  <label for="tcpSerialBaud">Baud Rate</label>
+                  <select id="tcpSerialBaud" name="tcpSerialBaud">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpSerialDataBits">Data Bits</label>
+                  <select id="tcpSerialDataBits" name="tcpSerialDataBits">
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tcpSerialStopBits">Stop Bits</label>
+                  <select id="tcpSerialStopBits" name="tcpSerialStopBits">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- TCP Fields -->
+            <div class="connection-fields" id="tcpFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpIP">IP Address</label>
+                  <input type="text" id="tcpIP" name="tcpIP" autocomplete="off" placeholder="192.168.1.100">
+                </div>
+                <div class="form-group">
+                  <label for="tcpPort">Port</label>
+                  <input type="number" id="tcpPort" name="tcpPort" autocomplete="off" placeholder="5000">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpProtocol">Protocol</label>
+                  <select id="tcpProtocol" name="tcpProtocol">
+                    <option value="raw">Raw TCP</option>
+                    <option value="http">HTTP</option>
+                    <option value="websocket">WebSocket</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- MQTT Fields -->
+            <div class="connection-fields" id="mqttFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mqttBroker">Broker URL</label>
+                  <input type="text" id="mqttBroker" name="mqttBroker" autocomplete="off" placeholder="mqtt://192.168.1.100:1883">
+                </div>
+                <div class="form-group">
+                  <label for="mqttTopic">Topic</label>
+                  <input type="text" id="mqttTopic" name="mqttTopic" autocomplete="off" placeholder="sensors/data">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mqttClientId">Client ID</label>
+                  <input type="text" id="mqttClientId" name="mqttClientId" autocomplete="off" placeholder="equipment_monitor_001">
+                </div>
+                <div class="form-group">
+                  <label for="mqttQos">QoS</label>
+                  <select id="mqttQos" name="mqttQos">
+                    <option value="0">0 - At most once</option>
+                    <option value="1">1 - At least once</option>
+                    <option value="2">2 - Exactly once</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Modbus Fields -->
+            <div class="connection-fields" id="modbusFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="modbusType">Type</label>
+                  <select id="modbusType" name="modbusType">
+                    <option value="tcp">Modbus TCP</option>
+                    <option value="rtu">Modbus RTU (Serial)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="modbusIP">IP Address / Port</label>
+                  <input type="text" id="modbusIP" name="modbusIP" autocomplete="off" placeholder="192.168.1.100:502 or /dev/ttyUSB0">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="modbusUnitId">Unit ID</label>
+                  <input type="number" id="modbusUnitId" name="modbusUnitId" autocomplete="off" placeholder="1" value="1">
+                </div>
+                <div class="form-group">
+                  <label for="modbusRegister">Register Map (JSON)</label>
+                  <input type="text" id="modbusRegister" name="modbusRegister" autocomplete="off" placeholder='{"temp": 0, "humidity": 1}'>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Equipment
+            </button>
+            <button type="button" class="btn btn-secondary" id="cancelEquipmentEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="userModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-user-plus"></i> <span id="userModalFormTitle">Add New User</span></h3>
+        <button class="modal-close" id="closeUserModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="userForm" autocomplete="off">
+          <input type="hidden" id="userId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="userName">Name</label>
+              <input type="text" id="userName" name="userName" autocomplete="name" required placeholder="Enter name">
+            </div>
+            <div class="form-group">
+              <label for="userUsername">Username</label>
+              <input type="text" id="userUsername" name="userUsername" autocomplete="username" required placeholder="Enter username">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="userPassword">Password</label>
+              <input type="password" id="userPassword" name="userPassword" autocomplete="new-password" placeholder="Enter password">
+            </div>
+            <div class="form-group">
+              <label for="userRole">Role</label>
+              <select id="userRole" name="userRole" required>
+                <option value="user_cabang">User</option>
+                <option value="teknisi_cabang">Teknisi</option>
+                <option value="user_pusat">User Pusat</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save User
+            </button>
+            <button type="button" class="btn btn-secondary" id="cancelUserEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div class="modal-overlay hidden" id="userDetailModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-user"></i> User Details</h3>
+        <button class="modal-close" id="closeUserDetailModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="userDetailContent">
+        <!-- Content will be populated by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+<!-- Airport Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="airportModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-plane"></i> <span id="airportModalFormTitle">Add New Airport</span></h3>
+        <button class="modal-close" id="closeAirportModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="airportForm" autocomplete="off">
+          <input type="hidden" id="airportId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="airportName">Airport Name</label>
+              <input type="text" id="airportName" name="airportName" autocomplete="off" required placeholder="e.g., Sentani">
+            </div>
+            <div class="form-group">
+              <label for="airportCity">City</label>
+              <input type="text" id="airportCity" name="airportCity" autocomplete="off" required placeholder="e.g., Jayapura">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="airportLat">Latitude</label>
+              <input type="number" step="0.0001" id="airportLat" name="airportLat" autocomplete="off" required placeholder="e.g., -2.5768">
+            </div>
+            <div class="form-group">
+              <label for="airportLng">Longitude</label>
+              <input type="number" step="0.0001" id="airportLng" name="airportLng" autocomplete="off" required placeholder="e.g., 140.5164">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="airportParent">Parent Airport (Optional)</label>
+              <select id="airportParent" name="airportParent">
+                <option value="">None (Main Airport)</option>
+              </select>
+              <small style="color: var(--text-muted); font-size: 0.8rem;">Select parent airport to create hierarchical structure</small>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Airport
+            </button>
+            <button type="button" class="btn btn-secondary" id="cancelAirportEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNMP Data Modal -->
+  <div class="modal-overlay hidden" id="snmpDataModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-network-wired"></i> SNMP Data</h3>
+        <button class="modal-close" id="closeSnmpDataModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="snmpDataContent">
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNMP Template Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="snmpTemplateModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-network-wired"></i> <span id="snmpTemplateModalFormTitle">Add SNMP Template</span></h3>
+        <button class="modal-close" id="closeSnmpTemplateModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="snmpTemplateForm" autocomplete="off">
+          <input type="hidden" id="snmpTemplateId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="snmpTemplateName">Template Name</label>
+              <input type="text" id="snmpTemplateName" name="snmpTemplateName" autocomplete="off" required placeholder="e.g., Temperature Sensor">
+            </div>
+            <div class="form-group">
+              <label for="snmpTemplateCategory">Category</label>
+              <select id="snmpTemplateCategory" name="snmpTemplateCategory">
+                <option value="">Select Category</option>
+                <option value="Communication">Communication</option>
+                <option value="Navigation">Navigation</option>
+                <option value="Surveillance">Surveillance</option>
+                <option value="Data Processing">Data Processing</option>
+                <option value="Support">Support</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="snmpTemplateDescription">Description</label>
+            <textarea id="snmpTemplateDescription" name="snmpTemplateDescription" rows="2" autocomplete="off" placeholder="Enter description"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="snmpTemplateOidBase">OID Base</label>
+            <input type="text" id="snmpTemplateOidBase" name="snmpTemplateOidBase" autocomplete="off" required placeholder="e.g., 1.3.6.1.4.1.50000">
+          </div>
+          
+          <!-- OID Mappings -->
+          <div class="form-group">
+            <label>OID Mappings</label>
+            <div id="oidMappingsContainer" style="margin-top: 10px;">
+              <!-- OID mapping rows will be added here -->
+            </div>
+            <button type="button" class="btn btn-secondary" id="addOidMappingBtn" style="margin-top: 10px;">
+              <i class="fas fa-plus"></i> Add OID Mapping
+            </button>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Template
+            </button>
+            <button type="button" class="btn btn-secondary" id="cancelSnmpTemplateEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <img src="icon.png" alt="Logo" class="sidebar-logo">
+          <h2><span class="logo-text">Tecnical Operation Center</span></h2>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-section="dashboard">
+          <i class="fas fa-map-marked-alt"></i>
+          <span>Map Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-section="cabang">
+          <i class="fas fa-building"></i>
+          <span>Cabang</span>
+        </a>
+        <a href="#" class="nav-item" data-section="equipment">
+          <i class="fas fa-tools"></i>
+          <span>Equipment</span>
+        </a>
+        <a href="#" class="nav-item" data-section="airports">
+          <i class="fas fa-plane"></i>
+          <span>Airports</span>
+        </a>
+        <a href="#" class="nav-item" data-section="snmp-templates">
+          <i class="fas fa-network-wired"></i>
+          <span>SNMP Templates</span>
+        </a>
+        <a href="#" class="nav-item" data-section="equipment-logs" id="equipmentLogsNavItem" style="display: none;">
+          <i class="fas fa-history"></i>
+          <span>Equipment Logs</span>
+        </a>
+        <a href="#" class="nav-item" data-section="users" id="usersNavItem" style="display: none;">
+          <i class="fas fa-users"></i>
+          <span>User Management</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user-panel" id="sidebarUserPanel">
+          <i class="fas fa-user-circle"></i>
+          <span id="sidebarUserName">User</span>
+        </div>
+        <button class="sidebar-logout-btn" id="sidebarLogoutBtn">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </button>
+        <button id="themeToggle" class="theme-toggle">
+          <i class="fas fa-moon"></i>
+          <span>Dark Mode</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <button class="menu-toggle" id="menuToggle">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="header-title-container">
+          <h1>Airnav Equipment Management</h1>
+          <div class="header-breadcrumb" id="headerBreadcrumb">
+            <span class="breadcrumb-icon"><i class="fas fa-map-marked-alt"></i></span>
+            <span class="breadcrumb-text">Map Dashboard</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <!-- User panel moved to sidebar -->
+        </div>
+      </header>
+
+
+      <!-- Dashboard Section (Map) -->
+      <section class="content-section" id="dashboardSection">
+        <div class="map-stats-container">
+          <!-- Stats Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-tools"></i></div>
+              <div class="stat-info">
+                <h3>Total Equipment</h3>
+                <p class="stat-number" id="totalEquipment">0</p>
+              </div>
+            </div>
+            <div class="
