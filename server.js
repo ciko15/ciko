@@ -1037,7 +1037,7 @@ app.get('/api/auth/captcha', (req, res) => {
 // Equipment routes with pagination
 app.get('/api/equipment', authenticateToken, async (req, res) => {
   try {
-    const { airportId, branchId, category, isActive, page = 1, limit = 1000 } = req.query;
+    const { airportId, branchId, category, isActive, page = 1, limit = 1000, includeData } = req.query;
 
     // Enforce branch scoping for branch users (cabang)
     // Admin and pusat users can optionally specify branchId/airportId to filter
@@ -1055,7 +1055,8 @@ app.get('/api/equipment', authenticateToken, async (req, res) => {
       category: category || undefined,
       isActive: isActive === 'all' ? undefined : (isActive !== undefined ? isActive === 'true' : true), // Allow fetching all
       page: parseInt(page),
-      limit: parseInt(limit)
+      limit: parseInt(limit),
+      includeData: includeData === 'true'
     });
 
     res.json(result);

@@ -1142,37 +1142,53 @@
       <!-- Cabang Section -->
       <section class="content-section hidden" id="cabangSection">
         <div class="crud-container">
-          <div id="cabangMonitoringSection">
-            <div class="card" style="margin-top: 0;">
-              <div class="card-body" style="padding-top: 15px;">
-          <div class="monitoring-layout">
-            <!-- Branch List Sidebar -->
-            <div class="branch-list-sidebar">
-                    <div class="search-box branch-search-box">
-                      <label for="searchLocations" class="visually-hidden">Search locations</label>
-                      <i class="fas fa-search"></i>
-                      <input type="text" id="searchLocations" placeholder="Search locations..." aria-label="Search locations">
-                    </div>
-                    <div id="branchListContainer" class="branch-list">
-                      <!-- All branches will be rendered here -->
-                    </div>
-                  </div>
-
-                  <!-- Equipment Display -->
-                  <div class="equipment-display">
-                    <div class="monitoring-filters">
-                      <button class="filter-btn active" data-filter="all">All</button>
-                      <button class="filter-btn" data-filter="Communication">Communication</button>
-                      <button class="filter-btn" data-filter="Navigation">Navigation</button>
-                      <button class="filter-btn" data-filter="Surveillance">Surveillance</button>
-                      <button class="filter-btn" data-filter="Data Processing">Data Processing</button>
-                      <button class="filter-btn" data-filter="Support">Support</button>
-                    </div>
-                    <div id="equipmentCardsContainer" class="equipment-cards-container">
-                      <!-- Equipment cards will be rendered here -->
-                    </div>
-                  </div>
+          <div class="card" style="margin-top: 0;">
+            <div class="card-header">
+              <div class="header-actions" style="display: flex; gap: 15px; width: 100%; align-items: center;">
+                <div class="search-box" style="flex: 1;">
+                  <label for="searchCabang" class="visually-hidden">Search equipment</label>
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="searchCabang" placeholder="Search branch equipment..." aria-label="Search equipment">
                 </div>
+                <div class="header-filters" style="display: flex; gap: 10px;">
+                  <select id="filterCabangAirport" class="filter-select" style="min-width: 180px;">
+                    <option value="">All Airports</option>
+                  </select>
+                  <select id="filterCabangCategory" class="filter-select">
+                    <option value="">All Categories</option>
+                    <option value="Communication">Communication</option>
+                    <option value="Navigation">Navigation</option>
+                    <option value="Surveillance">Surveillance</option>
+                    <option value="Data Processing">Data Processing</option>
+                    <option value="Support">Support</option>
+                  </select>
+                  <button class="btn btn-secondary" id="refreshCabangBtn" title="Refresh Data">
+                    <i class="fas fa-sync-alt"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="monitoring-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 100px;">Status Alat</th>
+                      <th>Nama Alat</th>
+                      <th>Category</th>
+                      <th>Lokasi Airport</th>
+                      <th>Realtime Data / Action Data</th>
+                      <th style="width: 160px;">Last Update</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cabangTableBody">
+                    <tr>
+                      <td colspan="6" class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i> Loading equipment data...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

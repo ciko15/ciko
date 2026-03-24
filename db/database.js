@@ -188,8 +188,15 @@ async function deleteAirport(id) {
 // ==================== EQUIPMENT ====================
 
 async function getAllEquipment(filters = {}) {
+  let selectClause = `e.*, a.name as airport_name, b.name as branch_name`;
+  if (filters.includeData) {
+    selectClause += `, 
+      (SELECT data FROM equipment_logs WHERE equipment_id = e.id ORDER BY id DESC LIMIT 1) as last_data,
+      (SELECT logged_at FROM equipment_logs WHERE equipment_id = e.id ORDER BY id DESC LIMIT 1) as last_update`;
+  }
+
   let query = `
-    SELECT e.*, a.name as airport_name, b.name as branch_name
+    SELECT ${selectClause}
     FROM equipment e
     LEFT JOIN airports a ON e.airport_id = a.id
     LEFT JOIN airports b ON e.branch_id = b.id
@@ -219,7 +226,7 @@ async function getAllEquipment(filters = {}) {
     }
   }
   
-  let countQuery = query.replace('SELECT e.*, a.name as airport_name', 'SELECT COUNT(*) as total');
+  let countQuery = query.replace(`SELECT ${selectClause}`, 'SELECT COUNT(*) as total');
   const [countResult] = await pool.query(countQuery, values);
   const total = parseInt(countResult[0]?.total || 0);
   
@@ -255,6 +262,16 @@ async function getAllEquipment(filters = {}) {
     // Get IP address from database column or from snmpConfig
     const ipAddress = row.ip_address || (snmpConfig && snmpConfig.ip) || '';
     
+    // Parse last_data if it exists
+    let lastData = null;
+    if (row.last_data) {
+      try {
+        lastData = typeof row.last_data === 'string' ? JSON.parse(row.last_data) : row.last_data;
+      } catch (e) {
+        lastData = null;
+      }
+    }
+
     const branchId = row.branch_id || row.airport_id;
     const branchName = row.branch_name || row.airport_name;
 
@@ -266,6 +283,8 @@ async function getAllEquipment(filters = {}) {
       ipAddress: ipAddress,
       snmp_config: snmpConfig,
       snmpConfig: snmpConfig,
+      lastData: lastData,
+      lastUpdate: row.last_update,
       airportName: row.airport_name,
       airportId: row.airport_id,
       branchName: branchName,

@@ -1465,3 +1465,90 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================
+   MONITORING TABLE & ACTION DATA GRID
+   ============================================ */
+
+.monitoring-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 10px;
+}
+
+.monitoring-table th {
+  background: rgba(30, 41, 59, 0.5);
+  color: var(--monitoring-text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 2px solid var(--monitoring-border);
+}
+
+.monitoring-table td {
+  padding: 15px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--monitoring-border);
+  color: var(--monitoring-text);
+  transition: background 0.2s ease;
+}
+
+.monitoring-table tr:hover td {
+  background: rgba(51, 65, 85, 0.3);
+}
+
+/* Action Data Grid inside Table Cell */
+.action-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  min-width: 250px;
+}
+
+.data-item {
+  background: rgba(15, 23, 42, 0.4);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.data-label {
+  font-size: 0.7rem;
+  color: var(--monitoring-text-muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.data-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--monitoring-accent-hover);
+}
+
+.category-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.category-badge.communication { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
+.category-badge.navigation { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+.category-badge.surveillance { background: rgba(236, 72, 153, 0.2); color: #f472b6; }
+.category-badge.data-processing { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.category-badge.support { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+.empty-state {
+  text-align: center;
+  padding: 40px !important;
+  color: var(--monitoring-text-muted);
+}
