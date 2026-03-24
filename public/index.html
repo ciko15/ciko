@@ -1169,26 +1169,10 @@
               </div>
             </div>
             <div class="card-body">
-              <div class="table-responsive">
-                <table class="monitoring-table">
-                  <thead>
-                    <tr>
-                      <th style="width: 100px;">Status Alat</th>
-                      <th>Nama Alat</th>
-                      <th>Category</th>
-                      <th>Lokasi Airport</th>
-                      <th>Realtime Data / Action Data</th>
-                      <th style="width: 160px;">Last Update</th>
-                    </tr>
-                  </thead>
-                  <tbody id="cabangTableBody">
-                    <tr>
-                      <td colspan="6" class="empty-state">
-                        <i class="fas fa-spinner fa-spin"></i> Loading equipment data...
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div id="cabangGrid" class="cabang-grid-container">
+                <div class="empty-state">
+                  <i class="fas fa-spinner fa-spin"></i> Loading equipment data...
+                </div>
               </div>
             </div>
           </div>

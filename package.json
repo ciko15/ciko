@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:bun": "bun src/server.ts",
     "dev": "node server.js",
+    "dev:bun": "bun --watch src/server.ts",
     "init-db": "node db/init.js"
   },
   "keywords": [
@@ -19,9 +21,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/jwt": "^1.4.1",
+    "@elysiajs/server-timing": "^1.4.0",
+    "@elysiajs/static": "^1.4.7",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^16.3.1",
+    "elysia": "^1.4.28",
     "express": "^4.18.2",
     "express-rate-limit": "^7.5.1",
     "express-validator": "^7.3.1",

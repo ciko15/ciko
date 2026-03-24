@@ -1552,3 +1552,198 @@
   padding: 40px !important;
   color: var(--monitoring-text-muted);
 }
+
+/* =====================================================
+   CABANG MONITORING - GRID/CARD LAYOUT (ISSUE #6)
+   ===================================================== */
+
+.cabang-grid-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 10px 0;
+}
+
+@media (max-width: 1200px) {
+  .cabang-grid-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .cabang-grid-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cabang-card {
+  background: var(--monitoring-card-bg);
+  border: 1px solid var(--monitoring-border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.cabang-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--monitoring-accent);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.cabang-card.alarm { border-left: 4px solid var(--monitoring-danger); }
+.cabang-card.warning { border-left: 4px solid var(--monitoring-warning); }
+.cabang-card.normal { border-left: 4px solid var(--monitoring-success); }
+.cabang-card.offline { border-left: 4px solid var(--monitoring-text-muted); }
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.card-info h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--monitoring-text);
+  line-height: 1.2;
+}
+
+.card-info .code {
+  font-size: 0.75rem;
+  color: var(--monitoring-text-muted);
+  display: block;
+  margin-top: 4px;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.normal { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.status-badge.alarm { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.status-badge.warning { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.status-badge.offline { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+
+.card-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--monitoring-text-muted);
+}
+
+.card-location i { font-size: 0.75rem; color: var(--monitoring-accent); }
+
+.card-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 4px;
+}
+
+.data-point {
+  display: flex;
+  flex-direction: column;
+}
+
+.data-label {
+  font-size: 0.65rem;
+  color: var(--monitoring-text-muted);
+  text-transform: uppercase;
+}
+
+.data-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--monitoring-text);
+}
+
+.card-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--monitoring-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.last-update {
+  font-size: 0.65rem;
+  color: var(--monitoring-text-muted);
+}
+
+.category-tag {
+  font-size: 0.65rem;
+  background: var(--monitoring-border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--monitoring-text);
+}
+
+.empty-data {
+  font-size: 0.75rem;
+  color: var(--monitoring-text-muted);
+  font-style: italic;
+  padding: 10px;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 6px;
+  border: 1px dashed var(--monitoring-border);
+}
+
+.card-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 5px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Status Pulse Animations */
+@keyframes status-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.status-badge.normal, .status-badge.alarm, .status-badge.warning {
+  animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.data-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--monitoring-accent);
+}
+
+.cabang-card h3 {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}

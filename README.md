@@ -1,103 +1,97 @@
 # ciko
 Belajar sync repository pada github
 
-# My Full-Stack App
+# TOC (Technical Operation Center) Monitoring System
 
-Aplikasi web full-stack sederhana menggunakan Node.js, Express.js, dan Vanilla JavaScript.
+A professional, high-performance monitoring and management system for airport technical equipment (Navigation, Communication, Surveillance), built with a modern backend and realtime dashboard.
 
-## 📋 Deskripsi
+## 📋 Features
 
-Aplikasi manajemen user dengan fitur:
-- Tambah user baru
-- Lihat daftar user
-- Hapus user
-- API RESTful untuk operasi CRUD
+- **Realtime Monitoring**: NOC-style dashboard with live status updates.
+- **Multi-Protocol Support**: SNMP (v2c), ASTERIX (Radar), and RCMS (Custom Parser).
+- **Branch Management**: Advanced filtering by Airport and Category.
+- **Technical Diagnostics**: Integrated Ping, SNMP Walk, and Data Capturing tools.
+- **Reporting**: Automated logs with time-series data storage.
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
-- **Backend**: Node.js + Express.js
-- **Frontend**: HTML, CSS, Vanilla JavaScript
-- **Port**: 3000
+- **Runtime**: [Bun](https://bun.sh/) (Fast all-in-one JavaScript runtime)
+- **Backend Framework**: [ElysiaJS](https://elysiajs.com/) (Ergonomic, high-performance Bun framework)
+- **Database**: MySQL / MariaDB (Relational data & JSON logs)
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript (Modern ES6+)
+- **Protocols**: 
+    - **SNMP**: Device monitoring (v2c).
+    - **ASTERIX**: Radar/Surveillance data parsing.
+    - **RCMS**: Custom TCP/UDP data packet parsing.
 
-## 📁 Struktur Proyek
+## 📁 System Architecture
 
+```mermaid
+graph TD
+    Device[Equipment / Sensor] -->|SNMP/ASTERIX/TCP| Collector[Bun/Elysia Collector Service]
+    Collector -->|Parsed Data| DB[(MySQL Database)]
+    DB -->|Realtime Query| API[Elysia API Endpoints]
+    API -->|JSON/WebSocket| Dashboard[NOC Dashboard / Monitoring Table]
+    Dashboard -->|User Actions| API
 ```
-my-fullstack-app/
-├── package.json          # Konfigurasi proyek
-├── server.js            # Server Express + API
-├── node_modules/       # Dependencies (terinstal)
-└── public/
-    ├── index.html      # Halaman utama
-    ├── style.css      # Styling UI
-    └── app.js         # Frontend JavaScript
-```
 
-## 🔌 API Endpoints
+## 🗄️ Database Schema & Types
 
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| GET | `/api/users` | Ambil semua user |
-| GET | `/api/users/:id` | Ambil user berdasarkan ID |
-| POST | `/api/users` | Tambah user baru |
-| PUT | `/api/users/:id` | Update user |
-| DELETE | `/api/users/:id` | Hapus user |
+| Table | Column | Type | Description |
+|-------|--------|------|-------------|
+| **airports** | `id` | INT (PK) | Unique ID for Airport/Branch. |
+| | `name` | VARCHAR(100) | Name of the airport. |
+| | `city` | VARCHAR(100) | City location. |
+| | `lat/lng`| DECIMAL | Geographic coordinates. |
+| **equipment** | `id` | INT (PK) | Unique equipment ID. |
+| | `code` | VARCHAR(50) | Unique equipment code. |
+| | `category`| VARCHAR(50) | Navigation, Communication, etc. |
+| | `snmp_config`| JSON | SNMP settings (IP, OID, Port). |
+| **equipment_logs** | `id` | INT (PK) | Log entry ID. |
+| | `equipment_id`| INT (FK) | Reference to equipment. |
+| | `data` | JSON | Parsed technical parameters. |
+| | `logged_at`| TIMESTAMP | Time of data capture. |
+| **users** | `username` | VARCHAR(50) | Unique login name. |
+| | `role` | VARCHAR(50) | Permission level (admin, teknisi, etc.). |
 
-## 📖 Cara Penggunaan
+## 📖 Standard Operating Procedure (SOP)
 
-### Menghidupkan Server (Start)
+### 1. Login & Authentication
+- Access the application via browser at `http://localhost:3100`.
+- Enter your **Username** and **Password**.
+- Complete the simple Captcha verification.
 
+### 2. Monitoring Equipment
+- Use the **Dashboard** to see the overall health of system.
+- Use the **Cabang (Branch)** menu for a detailed table-view of all devices.
+- Green status indicates **Normal**, Red indicates **Alarm/Disconnect**.
+
+### 3. Adding New Equipment
+- Navigate to the **Management** section.
+- Fill in the equipment details, location (Airport), and connection type.
+- For SNMP devices, select the appropriate **Template** (e.g., DME, DVOR, MOXA).
+
+### 4. Diagnostics & Troubleshooting
+- Use the **Ping** button to test network connectivity.
+- Use **SNMP Tools** to walk OIDs and verify specific sensor readings.
+- Check **Equipment Logs** for historical trend analysis.
+
+## 🚀 Getting Started (Bun)
+
+### Installation
 ```bash
-# 1. Masuk ke direktori proyek
-cd /Users/vickra/Documents/PHYTON/TOC\ Project/my-fullstack-app
+# 1. Clone repository
+git clone <repo-url>
 
-# 2. Install dependencies (hanya pertama kali)
-npm install
+# 2. Install dependencies via Bun
+bun install
 
-# 3. Jalankan server
-npm start
+# 3. Setup Database
+# Import db/schema_mysql.sql and db/seed_snmp_templates.sql into your MySQL server.
 ```
 
-Atau satu baris:
+### Running the App
 ```bash
-cd /Users/vickra/Documents/PHYTON/TOC\ Project/my-fullstack-app && npm start
+# Start development server with auto-reload
+npm run dev:bun
 ```
-
-**Catatan**: Server akan berjalan di `http://localhost:3000`
-
-### Mematikan Server (Stop)
-
-Ada beberapa cara untuk menghentikan server:
-
-**Cara 1: Menggunakan Ctrl+C**
-- Tekan `Ctrl + C` di terminal yang menjalankan server
-
-**Cara 2: Menggunakan PID**
-```bash
-# Cari PID proses node
-lsof -i :3000
-
-# Matikan proses
-kill <PID>
-```
-
-**Cara 3: Menggunakan pkill**
-```bash
-pkill -f "node server.js"
-```
-
-## 🚀 Menggunakan Aplikasi
-
-1. Buka browser dan akses `http://localhost:3000`
-2. **Tambah User**: Isi form Name dan Email, klik "Add User"
-3. **Lihat User**: Klik "Load Users" untuk memperbarui daftar
-4. **Hapus User**: Klik tombol "Delete" pada user yang ingin dihapus
-
-## 📝 Sample Data
-
-Aplikasi sudah menyediakan 2 sample user:
-1. John Doe - john@example.com
-2. Jane Smith - jane@example.com
-
----
-
-*Dibuat menggunakan Node.js dan Express.js*

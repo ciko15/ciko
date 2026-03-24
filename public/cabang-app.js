@@ -20,7 +20,7 @@ const cabangModule = (function() {
   let autoRefreshInterval = null;
   
   // DOM Elements
-  const cabangTableBody = document.getElementById('cabangTableBody');
+  const cabangGrid = document.getElementById('cabangGrid');
   const searchCabang = document.getElementById('searchCabang');
   const filterAirport = document.getElementById('filterCabangAirport');
   const filterCategory = document.getElementById('filterCabangCategory');
@@ -39,21 +39,21 @@ const cabangModule = (function() {
     if (searchCabang) {
       searchCabang.addEventListener('input', (e) => {
         searchQuery = e.target.value.toLowerCase();
-        renderCabangTable();
+        renderCabangGrid();
       });
     }
     
     if (filterAirport) {
       filterAirport.addEventListener('change', (e) => {
         currentAirportFilter = e.target.value;
-        renderCabangTable();
+        renderCabangGrid();
       });
     }
     
     if (filterCategory) {
       filterCategory.addEventListener('change', (e) => {
         currentCategoryFilter = e.target.value;
-        renderCabangTable();
+        renderCabangGrid();
       });
     }
     
@@ -98,8 +98,8 @@ const cabangModule = (function() {
   }
   
   async function loadEquipment(silent = false) {
-    if (!silent && cabangTableBody) {
-      cabangTableBody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-spinner fa-spin"></i> Refreshing data...</td></tr>';
+    if (!silent && cabangGrid) {
+      cabangGrid.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i> Refreshing data...</div>';
     }
     
     try {
@@ -116,23 +116,29 @@ const cabangModule = (function() {
       const result = await response.json();
       equipmentData = result.data || result;
       
-      renderCabangTable();
+      renderCabangGrid();
     } catch (error) {
       console.error('[Cabang] Error loading equipment:', error);
-      if (cabangTableBody) {
-        cabangTableBody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: var(--accent-danger);"><i class="fas fa-exclamation-triangle"></i> Error loading data</td></tr>`;
+      if (cabangGrid) {
+        cabangGrid.innerHTML = `<div class="empty-state" style="color: var(--accent-danger);"><i class="fas fa-exclamation-triangle"></i> Error loading data</div>`;
       }
     }
   }
   
-  function renderCabangTable() {
-    if (!cabangTableBody) return;
+  function renderCabangGrid() {
+    if (!cabangGrid) return;
     
     let filtered = equipmentData;
     
-    // Apply Airport Filter
+    // Apply Airport Filter - Robust check for both airportId and branchId
     if (currentAirportFilter) {
-      filtered = filtered.filter(e => String(e.airportId) === String(currentAirportFilter) || String(e.branchId) === String(currentAirportFilter));
+      const filterId = String(currentAirportFilter);
+      filtered = filtered.filter(e => 
+        String(e.airportId) === filterId || 
+        String(e.branchId) === filterId ||
+        (e.airport_id && String(e.airport_id) === filterId) ||
+        (e.branch_id && String(e.branch_id) === filterId)
+      );
     }
     
     // Apply Category Filter
@@ -144,53 +150,69 @@ const cabangModule = (function() {
     if (searchQuery) {
       filtered = filtered.filter(e => 
         e.name.toLowerCase().includes(searchQuery) || 
-        e.airportName.toLowerCase().includes(searchQuery) ||
+        (e.airportName && e.airportName.toLowerCase().includes(searchQuery)) ||
         (e.code && e.code.toLowerCase().includes(searchQuery))
       );
     }
     
     if (filtered.length === 0) {
-      cabangTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No equipment found matching the filters.</td></tr>';
+      cabangGrid.innerHTML = '<div class="empty-state">No equipment found matching the filters.</div>';
       return;
     }
     
-    cabangTableBody.innerHTML = filtered.map(item => {
-      const statusClass = item.status.toLowerCase();
-      const isActive = item.isActive !== false;
-      const isActiveHtml = `<span style="color: ${isActive ? '#10b981' : '#ef4444'}; font-weight: 600;">${isActive ? 'Active' : 'Inactive'}</span>`;
+    cabangGrid.innerHTML = filtered.map(item => {
+      const status = (item.status || 'Offline').toLowerCase();
+      const statusClass = ['normal', 'alarm', 'warning'].includes(status) ? status : 'offline';
       
-      // Parse Realtime Data (Action Data)
-      let dataHtml = '<div class="action-data-summary">-</div>';
+      // Action Data
+      let dataHtml = '';
       if (item.lastData) {
-        const dataKeys = Object.keys(item.lastData).filter(k => k !== 'error' && k !== 'cached').slice(0, 4);
+        const dataKeys = Object.keys(item.lastData).filter(k => k !== 'error' && k !== 'cached').slice(0, 6);
         if (dataKeys.length > 0) {
-          dataHtml = `<div class="action-data-grid">
+          dataHtml = `<div class="card-data-grid">
             ${dataKeys.map(key => {
               const valObj = item.lastData[key];
               const isObj = valObj !== null && typeof valObj === 'object';
               const label = isObj && valObj.label ? valObj.label : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
               const val = isObj ? valObj.value : valObj;
               const unit = isObj && valObj.unit ? valObj.unit : '';
-              return `<div class="data-item"><span class="data-label">${label}:</span> <span class="data-value">${val}${unit}</span></div>`;
+              return `<div class="data-point">
+                <span class="data-label">${label}</span>
+                <span class="data-value">${val}${unit}</span>
+              </div>`;
             }).join('')}
           </div>`;
+        } else {
+          dataHtml = '<div class="empty-data">No realtime data available</div>';
         }
+      } else {
+        dataHtml = '<div class="empty-data">Waiting for data collection...</div>';
       }
       
-      const lastUpdate = item.lastUpdate ? new Date(item.lastUpdate).toLocaleString('id-ID') : '-';
+      const lastUpdate = item.lastUpdate ? new Date(item.lastUpdate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Never';
       
       return `
-        <tr data-id="${item.id}">
-          <td>${isActiveHtml}</td>
-          <td>
-            <div style="font-weight: 600;">${item.name}</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">${item.code || ''}</div>
-          </td>
-          <td><span class="category-badge ${item.category.toLowerCase().replace(' ', '-')}">${item.category}</span></td>
-          <td>${item.airportName || '-'}</td>
-          <td>${dataHtml}</td>
-          <td><div style="font-size: 0.85rem;">${lastUpdate}</div></td>
-        </tr>
+        <div class="cabang-card ${statusClass}" data-id="${item.id}">
+          <div class="card-top">
+            <div class="card-info">
+              <h3>${item.name}</h3>
+              <span class="code">${item.code || ''}</span>
+            </div>
+            <div class="status-badge ${statusClass}">${status}</div>
+          </div>
+          
+          <div class="card-location">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>${item.airportName || item.branchName || 'Unknown Location'}</span>
+          </div>
+          
+          ${dataHtml}
+          
+          <div class="card-footer">
+            <span class="category-tag">${item.category}</span>
+            <span class="last-update">Updated: ${lastUpdate}</span>
+          </div>
+        </div>
       `;
     }).join('');
   }
@@ -200,7 +222,7 @@ const cabangModule = (function() {
     if (filterAirport) {
       filterAirport.value = airportId;
       currentAirportFilter = airportId;
-      renderCabangTable();
+      renderCabangGrid();
     }
   }
   
@@ -208,7 +230,7 @@ const cabangModule = (function() {
     if (filterCategory) {
       filterCategory.value = category;
       currentCategoryFilter = category;
-      renderCabangTable();
+      renderCabangGrid();
     }
   }
   
