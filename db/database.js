@@ -1,18 +1,24 @@
 const mysql = require('mysql2/promise');
 const config = require('./config');
 
-// Create pool with socket connection for XAMPP
-const pool = mysql.createPool({
+// Create pool based on config
+const poolConfig = {
   host: config.host,
   port: config.port,
   database: config.database,
   user: config.user,
   password: config.password,
-  socketPath: '/Applications/XAMPP/xamppfiles/var/mysql/mysql.sock',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
-});
+};
+
+// Add socketPath only if provided (e.g. for XAMPP on macOS)
+if (config.socketPath) {
+  poolConfig.socketPath = config.socketPath;
+}
+
+const pool = mysql.createPool(poolConfig);
 
 pool.on('error', (err) => {
   console.error('[DB] Unexpected error on idle client', err);
