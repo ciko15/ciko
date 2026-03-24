@@ -25,6 +25,7 @@ let RadarReceiver = null;
 let AdsbReceiver = null;
 let radarReceiver = null;
 let adsbReceiver = null;
+let rcmsScheduler = null;
 
 try {
   RadarReceiver = require('./Backend/parse/radar_receiver');
@@ -2841,7 +2842,7 @@ async function startServer() {
 
     // Initialize RCMS/DME/DVOR data collector
     const equipmentService = new EquipmentService(db);
-    const rcmsScheduler = new DataCollectorScheduler(equipmentService);
+    rcmsScheduler = new DataCollectorScheduler(equipmentService);
     rcmsScheduler.start();
     console.log('[RCMS] Data collector scheduler started');
 
