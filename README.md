@@ -65,6 +65,7 @@ graph TD
 - Use the **Dashboard** to see the overall health of system.
 - Use the **Cabang (Branch)** menu for a detailed table-view of all devices.
 - Green status indicates **Normal**, Red indicates **Alarm/Disconnect**.
+- **Important Note:** In `SIMULATION_MODE` (default when physical sensors are unreachable or not configured), the server activates the Data Generator. You will see values fluctuating realistically (using a Random Walk algorithm) to simulate active equipment for demonstration or testing purposes.
 
 ### 3. Adding New Equipment
 - Navigate to the **Management** section.
@@ -76,22 +77,32 @@ graph TD
 - Use **SNMP Tools** to walk OIDs and verify specific sensor readings.
 - Check **Equipment Logs** for historical trend analysis.
 
-## 🚀 Getting Started (Bun)
+## 🚀 Backend Development & Migration to Bun
 
-### Installation
+**NOTICE: Legacy Node.js Support**
+The legacy Node.js server (`server.js` at the root directory) is now considered DEPRECATED. 
+All future development, including API routes, data generators, and scheduler tasks, **must** be done inside the `src/` directory using **Bun & ElysiaJS**.
+
+### How Data Generators Work (For Junior Devs & AI)
+When the system cannot connect to a physical hardware device (e.g., no gateway IP, or device offline), the backend will automatically fall back to the built-in **Simulators** (found in `src/utils/simulators.ts`).
+1. **DVOR/DME**: Simulates complex binary/hex parameter structures (Voltages, RF Power, Delay) applying slight randomized changes every 60 seconds.
+2. **SNMP**: Uses predefined templates from the database to construct mock OID responses based on the template's parameters.
+The `fetchAndParseData` function ties this together, tricking the frontend into displaying a live animated device block.
+
+### Running the App Locally
+
 ```bash
-# 1. Clone repository
-git clone <repo-url>
-
-# 2. Install dependencies via Bun
-bun install
-
-# 3. Setup Database
-# Import db/schema_mysql.sql and db/seed_snmp_templates.sql into your MySQL server.
-```
-
-### Running the App
-```bash
-# Start development server with auto-reload
+# Start development server with auto-reload (Bun & Elysia)
 npm run dev:bun
+
+# OR
+bun run dev:bun
+
+# Start production server
+npm run start:bun
 ```
+
+**Port**: Default running on `http://localhost:3100`
+
+---
+*Developed for TOC Management System*

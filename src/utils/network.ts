@@ -134,7 +134,7 @@ export async function fetchAndParseData(equipment: any) {
                 pResult = await parseAdvancedData('dme_maru_310_320', rawData, equipment);
                 return { parsedData: pResult.data, status: pResult.status };
             default:
-                rawData = generateSimulatedData(templateId, equipment.id);
+                rawData = await generateSimulatedData(templateId, equipment.id);
                 return { parsedData: rawData, status: await determineStatus(rawData, templateId) };
         }
     }
@@ -147,9 +147,76 @@ export async function fetchAndParseData(equipment: any) {
  * Determine status based on thresholds
  */
 export async function determineStatus(data: any, templateId: string) {
-    // Basic status determination logic
-    // In a real app, this would query DB for thresholds
-    return 'Normal';
+    const thresholdEvaluator = require('./thresholdEvaluator');
+    
+    let template;
+    try {
+        template = await db.getSnmpTemplateById(templateId);
+    } catch (e) {
+        template = null;
+    }
+
+    if (template && template.parameters && template.parameters.length > 0) {
+        let overallStatus = 'Normal';
+        const statusPriority: Record<string, number> = { 'Alert': 3, 'Warning': 2, 'Normal': 1, 'Disconnect': 0 };
+
+        for (const param of template.parameters) {
+            const valueObj = data[param.source] || data[param.label];
+            if (!valueObj || valueObj.value === undefined) continue;
+
+            const config = {
+                warning_min: param.warning_min,
+                warning_max: param.warning_max,
+                alarm_min: param.alarm_min,
+                alarm_max: param.alarm_max
+            };
+
+            const status = thresholdEvaluator.checkThreshold(valueObj.value, config);
+            if (statusPriority[status] > statusPriority[overallStatus]) {
+                overallStatus = status;
+            }
+        }
+        return overallStatus;
+    }
+
+    const defaultThresholds: Record<string, any> = {
+        temperature: { warning: 35, critical: 45 },
+        humidity: { warningLow: 30, warningHigh: 80, criticalLow: 20, criticalHigh: 90 },
+        alarmStatus: { warning: 1, critical: 2 }
+    };
+
+    let thresholds = defaultThresholds;
+    if (template && (template.oidMappings || template.oid_mappings)) {
+        const oidMappings = template.oidMappings || template.oid_mappings;
+        let pMappings = typeof oidMappings === 'string' ? JSON.parse(oidMappings) : oidMappings;
+        thresholds = {};
+        for (const [key, mapping] of Object.entries(pMappings) as any) {
+            if (mapping.warningThreshold !== undefined || mapping.criticalThreshold !== undefined) {
+                thresholds[key] = { warning: mapping.warningThreshold, critical: mapping.criticalThreshold };
+            }
+            if (mapping.warningLow !== undefined || mapping.warningHigh !== undefined) {
+                thresholds[key] = { ...thresholds[key], warningLow: mapping.warningLow, warningHigh: mapping.warningHigh, criticalLow: mapping.criticalLow, criticalHigh: mapping.criticalHigh };
+            }
+        }
+    }
+
+    let status = 'Normal';
+    for (const [key, valueObj] of Object.entries(data) as any) {
+        if (!valueObj || valueObj.value === undefined) continue;
+        const value = parseFloat(valueObj.value);
+        if (isNaN(value)) continue;
+        const threshold = thresholds[key];
+        if (!threshold) continue;
+        
+        if (threshold.warningLow !== undefined && threshold.warningHigh !== undefined) {
+            if (value <= threshold.criticalLow || value >= threshold.criticalHigh) return 'Alert';
+            if (value <= threshold.warningLow || value >= threshold.warningHigh) status = 'Warning';
+        } else if (threshold.criticalThreshold !== undefined) {
+            if (value >= threshold.criticalThreshold) return 'Alert';
+            if (threshold.warningThreshold !== undefined && value >= threshold.warningThreshold) status = 'Warning';
+        }
+    }
+    return status;
 }
 
 /**
@@ -157,7 +224,13 @@ export async function determineStatus(data: any, templateId: string) {
  */
 async function parseAdvancedData(type: string, rawData: any, equipment: any) {
     const ParserFactory = require('../parsers/factory');
-    const parser = ParserFactory.createParser(type, equipment);
+    const parser = ParserFactory.createParser(type, {
+        ...equipment,
+        parser_config: {},
+        threshold_overrides: {}
+    });
     if (!parser) throw new Error(`Parser for ${type} not found`);
-    return parser.parse(rawData);
+    const result = parser.parse(rawData);
+    if (!result.success) throw new Error(`Parsing failed for ${equipment.name}: ${result.error}`);
+    return result;
 }

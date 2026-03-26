@@ -104,47 +104,76 @@ export function generateDmeMaruData(equipmentId: string | number) {
 /**
  * Generate simulated SNMP data based on template
  */
-export function generateSimulatedData(templateId: string, equipmentId: string | number = 'default') {
+export async function generateSimulatedData(templateId: string, equipmentId: string | number = 'default') {
   if (Math.random() > 0.95) {
     throw new Error('Simulated Timeout: Device is unreachable');
   }
 
+  const db = require('../../db/database');
+  let template: any;
+  try {
+      template = await db.getSnmpTemplateById(templateId);
+  } catch(e) {}
+
   const stateKey = `${equipmentId}_${templateId}`;
   if (!simulationState[stateKey]) {
-    simulationState[stateKey] = {
-      temp: 25 + Math.random() * 5,
-      humidity: 40 + Math.random() * 20,
-      volt: 220 + Math.random() * 10,
-      load: 30 + Math.random() * 40
-    };
+      simulationState[stateKey] = {};
   }
-
   const state = simulationState[stateKey];
-  state.temp += (Math.random() * 0.4 - 0.2);
-  state.humidity += (Math.random() * 2 - 1);
-  state.volt += (Math.random() * 2 - 1);
-  state.load += (Math.random() * 4 - 2);
 
-  // Return simulated data based on common templates
-  if (templateId.includes('ups') || templateId.includes('pdu')) {
-    return {
-      output_voltage: state.volt.toFixed(1),
-      output_load: state.load.toFixed(1),
-      battery_status: 'Normal',
-      input_status: 'OK'
-    };
-  } else if (templateId.includes('environment')) {
-    return {
-      temperature: state.temp.toFixed(1),
-      humidity: state.humidity.toFixed(1),
-      smoke_detector: 'Normal',
-      door_status: 'Closed'
-    };
+  if (template && (template.oidMappings || template.oid_mappings)) {
+      let mappings = template.oidMappings || template.oid_mappings;
+      if (typeof mappings === 'string') {
+          try { mappings = JSON.parse(mappings); } catch (e) { mappings = {}; }
+      }
+      const result: any = {};
+      
+      for (const [key, mapping] of Object.entries(mappings) as any) {
+          let value;
+          const type = (mapping.type || 'INTEGER').toUpperCase();
+          
+          if (type.includes('INT') || type === 'GAUGE32' || type === 'TIMETICKS') {
+              if (state[key] !== undefined) {
+                  let delta = (Math.random() * 4) - 2;
+                  value = state[key] + delta;
+                  const max = mapping.criticalHigh || mapping.criticalThreshold || 100;
+                  const min = mapping.criticalLow || 0;
+                  if (value > max + 5) value -= 3;
+                  if (value < min - 5) value += 3;
+              } else {
+                  if (mapping.warningLow && mapping.warningHigh) {
+                      value = (mapping.warningLow + mapping.warningHigh) / 2;
+                  } else if (mapping.warningThreshold) {
+                      value = mapping.warningThreshold - (Math.random() * 5);
+                  } else {
+                      value = Math.floor(Math.random() * 50) + 20;
+                  }
+              }
+              state[key] = value;
+              value = String(Math.floor(value));
+          } else {
+              if (!state[key]) {
+                  state[key] = mapping.label === 'Operational Status' ? 'Online' : 
+                               mapping.label === 'Device Name' ? 'Simulated-Device' : '1';
+              }
+              value = String(state[key]);
+          }
+          
+          result[key] = {
+              oid: `${template.oidBase}.${mapping.oid}`,
+              value: value,
+              type: type,
+              label: mapping.label || key,
+              unit: mapping.unit || '',
+              timestamp: new Date().toISOString()
+          };
+      }
+      return result;
   }
 
+  // default mock
   return {
-    status: 'Normal',
-    value: Math.round(state.load),
-    timestamp: new Date().toISOString()
+    status: { value: 'Normal', type: 'STRING' },
+    value: { value: String(Math.round(25 + Math.random() * 5)), type: 'INTEGER' }
   };
 }

@@ -17,6 +17,8 @@ const templateService = require('./services/template');
 // Import Surveillance Receivers
 let RadarReceiver: any = null;
 let AdsbReceiver: any = null;
+let radarReceiver: any = null;
+let adsbReceiver: any = null;
 
 try {
     RadarReceiver = require('../Backend/parse/radar_receiver');
@@ -78,8 +80,59 @@ async function collectEquipmentData() {
 }
 
 async function collectSurveillanceData() {
-    // Basic placeholder for surveillance data collection (RADAR/ADSB)
-    console.log('[SCHEDULER] Surveillance data collection triggered');
+    try {
+        console.log('[SCHEDULER] Surveillance data collection triggered');
+        const db = require('../db/database');
+        const allEquipment = await db.getAllEquipment({ limit: 10000, isActive: true });
+        const equipmentList = allEquipment.data || allEquipment;
+        
+        const surveillanceEquipment = equipmentList.filter((item: any) => {
+            const config = item.snmpConfig || item.snmp_config;
+            return item.category === 'Surveillance' && config && config.enabled && 
+                   (config.method === 'asterix' || config.method === 'adsb');
+        });
+
+        for (const item of surveillanceEquipment) {
+            try {
+                const config = item.snmpConfig || item.snmp_config;
+                if (config.method === 'asterix' && RadarReceiver) {
+                    const result = await RadarReceiver.fetchData(item.id);
+                    const status = result.targets && result.targets.length > 0 ? 'Normal' : 'No Targets';
+                    await db.updateEquipmentStatus(item.id, status);
+                    await db.createEquipmentLog({
+                        equipmentId: item.id,
+                        data: { 
+                            status,
+                            receiverStatus: result.status,
+                            targetsCount: result.targets ? result.targets.length : 0,
+                            lastTarget: result.targets && result.targets.length > 0 ? result.targets[0] : null,
+                            stationName: item.name,
+                            stationCode: item.code
+                        },
+                        source: 'asterix'
+                    });
+                } else if (config.method === 'adsb' && AdsbReceiver) {
+                     const result = await AdsbReceiver.fetchData(item.id);
+                     const status = result.aircraft && result.aircraft.length > 0 ? 'Normal' : 'No Targets';
+                     await db.updateEquipmentStatus(item.id, status);
+                     await db.createEquipmentLog({
+                         equipmentId: item.id,
+                         data: {
+                             status,
+                             receiverStatus: result.status,
+                             aircraftCount: result.aircraft ? result.aircraft.length : 0,
+                             stationName: item.name
+                         },
+                         source: 'adsb'
+                     });
+                }
+            } catch (err: any) {
+                console.error(`[SCHEDULER-SURVEILLANCE] Error for ${item.name}:`, err.message);
+            }
+        }
+    } catch (error) {
+        console.error('[SCHEDULER-SURVEILLANCE] Error:', error);
+    }
 }
 
 async function seedUpsJakarta() {
@@ -94,6 +147,25 @@ async function seedUpsJakarta() {
     } catch (e: any) {
         console.error('[SEED] Failed:', e.message);
     }
+}
+
+// --- HELPER FUNCTIONS ---
+function getAirportStatus(airportId: number, equipmentList: any[]) {
+    if (!equipmentList || equipmentList.length === 0) return 'Normal';
+    if (equipmentList.some(e => e.status === 'Alert')) return 'Alert';
+    if (equipmentList.some(e => e.status === 'Warning')) return 'Warning';
+    if (equipmentList.some(e => e.status === 'Disconnect')) return 'Disconnect';
+    return 'Normal';
+}
+
+function getEquipmentCountByCategory(equipmentList: any[]) {
+    return {
+        Communication: equipmentList?.filter(e => e.category === 'Communication').length || 0,
+        Navigation: equipmentList?.filter(e => e.category === 'Navigation').length || 0,
+        Surveillance: equipmentList?.filter(e => e.category === 'Surveillance').length || 0,
+        'Data Processing': equipmentList?.filter(e => e.category === 'Data Processing').length || 0,
+        Support: equipmentList?.filter(e => e.category === 'Support').length || 0
+    };
 }
 
 // --- MIDDLEWARE ---
@@ -201,6 +273,72 @@ const app = new Elysia()
                 })
             })
     )
+
+    // Public Equipment Stats
+    .get('/api/equipment/stats', async () => {
+        try {
+            const stats = await db.getEquipmentStatsSummary();
+            
+            let normal = 0, warning = 0, alert = 0, disconnect = 0;
+            if (stats && Array.isArray(stats.statuses)) {
+                stats.statuses.forEach((row: any) => {
+                    if (row.status === 'Normal') normal = parseInt(row.count);
+                    if (row.status === 'Warning') warning = parseInt(row.count);
+                    if (row.status === 'Alert') alert = parseInt(row.count);
+                    if (row.status === 'Disconnect') disconnect = parseInt(row.count);
+                });
+            }
+            
+            const categories: any = {
+                Communication: 0, Navigation: 0, Surveillance: 0, 'Data Processing': 0, Support: 0
+            };
+            if (stats && Array.isArray(stats.categories)) {
+                stats.categories.forEach((row: any) => {
+                    if (categories[row.category] !== undefined) {
+                        categories[row.category] = parseInt(row.count);
+                    }
+                });
+            }
+            
+            return {
+                total: stats?.total || 0,
+                normal,
+                warning,
+                alert,
+                disconnect,
+                byCategory: categories
+            };
+        } catch (error: any) {
+            console.error('[API] Error fetching equipment stats:', error);
+            return {
+                total: 0, normal: 0, warning: 0, alert: 0, disconnect: 0,
+                byCategory: { Communication: 0, Navigation: 0, Surveillance: 0, 'Data Processing': 0, Support: 0 }
+            };
+        }
+    })
+
+    // Public Airports Data (Required for Public Dashboard)
+    .get('/api/airports', async () => {
+        const airports = await db.getAllAirports();
+        const allEquipment = await db.getAllEquipment({ limit: 10000, isActive: 'all' });
+        const equipmentData = allEquipment.data || allEquipment;
+
+        return airports.map((airport: any) => {
+            const airportEquipment = equipmentData.filter((e: any) => e.airportId === airport.id || e.branchId === airport.id);
+            const activeEquipment = airportEquipment.filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1');
+            
+            return {
+                ...airport,
+                status: getAirportStatus(airport.id, activeEquipment),
+                equipmentCount: getEquipmentCountByCategory(airportEquipment),
+                activeEquipmentCount: getEquipmentCountByCategory(activeEquipment),
+                totalEquipment: airportEquipment.length,
+                totalActiveEquipment: activeEquipment.length
+            };
+        });
+    })
+
+    .get('/health', () => ({ status: 'ok', runtime: 'Bun', framework: 'Elysia' }))
 
     // --- PROTECTED ROUTES ---
     .use(authenticate)
@@ -367,7 +505,6 @@ const app = new Elysia()
     // --- AIRPORT ROUTES ---
     .group('/api/airports', (app) =>
         app
-            .get('/', async () => await db.getAllAirports())
             .get('/:id', async ({ params, set }) => {
                 const item = await db.getAirportById(params.id);
                 if (!item) {
@@ -424,7 +561,7 @@ const app = new Elysia()
             .post('/templates', async ({ body, set }) => {
                 try {
                     const id = 'custom_' + Date.now();
-                    const newTemplate = await db.createSnmpTemplate({ ...body, id, isDefault: false });
+                    const newTemplate = await db.createSnmpTemplate({ ...(body as any), id, isDefault: false });
                     set.status = 201;
                     return newTemplate;
                 } catch (error: any) {
@@ -462,11 +599,11 @@ const app = new Elysia()
     )
     
     // --- THRESHOLD ROUTES ---
-    .group('/api/equipment/:equipmentId/thresholds', (app) =>
+    .group('/api/equipment/:id/thresholds', (app) =>
         app
-            .get('/', async ({ params }) => await db.getThresholdsByEquipment(params.equipmentId))
+            .get('/', async ({ params }) => await db.getThresholdsByEquipment(params.id))
             .post('/', async ({ params, body, set }) => {
-                const threshold = await db.createThreshold({ ...body, equipment_id: parseInt(params.equipmentId) });
+                const threshold = await db.createThreshold({ ...(body as any), equipment_id: parseInt(params.id) });
                 set.status = 201;
                 return threshold;
             }, { beforeHandle: authorize(['admin', 'user_pusat']) })
@@ -552,8 +689,6 @@ const app = new Elysia()
             });
     })
 
-    .get('/health', () => ({ status: 'ok', runtime: 'Bun', framework: 'Elysia' }))
-    
     .listen(PORT);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
@@ -579,9 +714,30 @@ async function startServices() {
         setTimeout(collectSurveillanceData, 8000);
 
         // 4. Initialize Surveillance Receivers if available
-        if (RadarReceiver) {
+        if (RadarReceiver && AdsbReceiver) {
             console.log('[SURVEILLANCE] Initializing Radar and ADS-B receivers...');
-            // In a real migration, we'd initialize the classes here
+            
+            radarReceiver = new RadarReceiver({
+                dataDir: './data',
+                onData: (type: string, station: any, data: any) => {
+                    console.log(`[SURVEILLANCE] Radar data from ${station.name}`);
+                },
+                onError: (station: any, error: any) => {
+                    console.error(`[SURVEILLANCE] Radar error for ${station.name}:`, error.message);
+                }
+            });
+            
+            adsbReceiver = new AdsbReceiver({
+                dataDir: './data',
+                onData: (station: any, aircraft: any) => {
+                    // console.log(`[SURVEILLANCE] ADS-B data from ${station.name}`);
+                }
+            });
+
+            if (radarReceiver.startAll) radarReceiver.startAll();
+            if (adsbReceiver.start) adsbReceiver.start();
+            
+            console.log('[SURVEILLANCE] Receivers started');
         }
 
         console.log('[SYSTEM] All services initialized successfully');
