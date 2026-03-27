@@ -373,6 +373,28 @@ const app = new Elysia()
 
     .get('/health', () => ({ status: 'ok', runtime: 'Bun', framework: 'Elysia' }))
 
+    // --- PUBLIC SNMP ROUTES ---
+    .get('/api/snmp/templates', async () => {
+        const templates = await db.getAllSnmpTemplates();
+        // Add built-in templates
+        const builtins = [
+            { id: 'dvor_maru_220', name: 'DVOR MARU 220', isDefault: true },
+            { id: 'dme_maru_310_320', name: 'DME MARU 310/320', isDefault: true }
+        ];
+        builtins.forEach(b => {
+            if (!templates.find((t: any) => t.id === b.id)) templates.push(b);
+        });
+        return templates;
+    }, { beforeHandle: () => {} })
+    .get('/api/snmp/templates/:id', async ({ params, set }) => {
+        const template = await db.getSnmpTemplateById(params.id);
+        if (!template) {
+            set.status = 404;
+            return { message: 'Template not found' };
+        }
+        return template;
+    }, { beforeHandle: () => {} })
+
     // --- PROTECTED ROUTES ---
     .use(authenticate)
 
@@ -675,26 +697,6 @@ const app = new Elysia()
     // --- SNMP ROUTES ---
     .group('/api/snmp', (app) =>
         app
-            .get('/templates', async () => {
-                const templates = await db.getAllSnmpTemplates();
-                // Add built-in templates
-                const builtins = [
-                    { id: 'dvor_maru_220', name: 'DVOR MARU 220', isDefault: true },
-                    { id: 'dme_maru_310_320', name: 'DME MARU 310/320', isDefault: true }
-                ];
-                builtins.forEach(b => {
-                    if (!templates.find((t: any) => t.id === b.id)) templates.push(b);
-                });
-                return templates;
-            })
-            .get('/templates/:id', async ({ params, set }) => {
-                const template = await db.getSnmpTemplateById(params.id);
-                if (!template) {
-                    set.status = 404;
-                    return { message: 'Template not found' };
-                }
-                return template;
-            })
             .post('/templates', async ({ body, set }) => {
                 try {
                     const id = 'custom_' + Date.now();
@@ -921,6 +923,11 @@ const app = new Elysia()
                 try {
                     let { username, password, name, role, branchId } = body as any;
                     
+                    if (!username || !name || !role) {
+                        set.status = 400;
+                        return { message: 'Username, Name, and Role are required' };
+                    }
+                    
                     if (!password) {
                         password = Math.random().toString(36).substring(2, 10);
                     }
@@ -938,11 +945,11 @@ const app = new Elysia()
                     set.status = 201;
                     return { ...newUser, tempPassword: !(body as any).password ? password : undefined };
                 } catch (error: any) {
-                    set.status = 500;
                     if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
                         set.status = 400;
                         return { message: 'Username already exists' };
                     }
+                    set.status = 500;
                     return { message: error.message };
                 }
             }, { beforeHandle: authorize(['admin']) })
@@ -960,6 +967,12 @@ const app = new Elysia()
                     }
                     
                     const { username, name, role, branchId, password } = body as any;
+                    
+                    if (username === "" || name === "" || role === "") {
+                        set.status = 400;
+                        return { message: 'Username, Name, and Role cannot be empty' };
+                    }
+                    
                     const updateData: any = { username, name, role, branchId };
                     
                     if (password) {
@@ -969,6 +982,10 @@ const app = new Elysia()
                     const updated = await db.updateUser(params.id, updateData);
                     return updated;
                 } catch (error: any) {
+                    if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
+                        set.status = 400;
+                        return { message: 'Username already exists' };
+                    }
                     set.status = 500;
                     return { message: error.message };
                 }

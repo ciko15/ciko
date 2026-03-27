@@ -1,8 +1,6 @@
 const bcrypt = require('bcryptjs');
-const { Pool } = require('pg');
+const mysql = require('mysql2/promise');
 const config = require('./config');
-
-const pool = new Pool(config);
 
 const saltRounds = 10;
 
@@ -15,20 +13,30 @@ const demoUsers = [
 ];
 
 async function initializeDatabase() {
+  let connection;
   try {
     console.log('[INIT] Starting database initialization...');
     
+    // Create connection
+    connection = await mysql.createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: config.database
+    });
+
     // Check if users table exists and has data
-    const checkResult = await pool.query('SELECT COUNT(*) as count FROM users');
-    const userCount = parseInt(checkResult.rows[0].count);
+    const [rows] = await connection.query('SELECT COUNT(*) as count FROM users');
+    const userCount = parseInt(rows[0].count);
     
-    if (userCount > 0) {
+    if (userCount > 0 && !process.argv.includes('--force')) {
       console.log(`[INIT] Users table already has ${userCount} users. Skipping initialization.`);
-      console.log('[INIT] To reinitialize, run: node db/init.js --force');
+      console.log('[INIT] To reinitialize, run: bun run db/init.js --force');
       
       // Check if passwords are hashed (bcrypt hashes start with $2)
-      const sampleUser = await pool.query('SELECT password FROM users LIMIT 1');
-      const password = sampleUser.rows[0]?.password;
+      const [sampleRows] = await connection.query('SELECT password FROM users LIMIT 1');
+      const password = sampleRows[0]?.password;
       
       if (password && !password.startsWith('$2')) {
         console.log('[WARNING] Existing passwords are NOT hashed! Run with --force to fix.');
@@ -37,22 +45,28 @@ async function initializeDatabase() {
       process.exit(0);
     }
     
+    if (process.argv.includes('--force')) {
+      console.log('[INIT] Force mode enabled - clearing existing users...');
+      await connection.query('DELETE FROM users');
+    }
+
     console.log('[INIT] Creating demo users with hashed passwords...');
     
     for (const user of demoUsers) {
       const hashedPassword = await bcrypt.hash(user.password, saltRounds);
       
-      await pool.query(`
+      // MySQL "ON DUPLICATE KEY UPDATE" syntax
+      await connection.query(`
         INSERT INTO users (username, password, name, role, branch_id)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (username) DO UPDATE SET
-          password = EXCLUDED.password,
-          name = EXCLUDED.name,
-          role = EXCLUDED.role,
-          branch_id = EXCLUDED.branch_id
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          password = VALUES(password),
+          name = VALUES(name),
+          role = VALUES(role),
+          branch_id = VALUES(branch_id)
       `, [user.username, hashedPassword, user.name, user.role, user.branch_id]);
       
-      console.log(`[INIT] Created user: ${user.username} (${user.role})`);
+      console.log(`[INIT] Created/Updated user: ${user.username} (${user.role})`);
     }
     
     console.log('[INIT] Database initialization completed successfully!');
@@ -63,29 +77,13 @@ async function initializeDatabase() {
     console.log('  Teknisi:   teknisi_jayapura / teknisi123');
     console.log('  User:      user / tester123');
     
+    process.exit(0);
   } catch (error) {
     console.error('[INIT] Error initializing database:', error);
     process.exit(1);
   } finally {
-    await pool.end();
+    if (connection) await connection.end();
   }
 }
 
-// Handle --force flag to reinitialize
-if (process.argv.includes('--force')) {
-  console.log('[INIT] Force mode enabled - will reinitialize all users...');
-  
-  (async () => {
-    try {
-      // Delete existing users
-      await pool.query('DELETE FROM users');
-      console.log('[INIT] Cleared existing users');
-      await initializeDatabase();
-    } catch (error) {
-      console.error('[INIT] Error in force mode:', error);
-      process.exit(1);
-    }
-  })();
-} else {
-  initializeDatabase();
-}
+initializeDatabase();

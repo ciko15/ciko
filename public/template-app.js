@@ -50,7 +50,7 @@ async function loadTemplates() {
   if (!tableBody) return;
 
   try {
-    const response = await fetch(`${API_URL}/templates`, {
+    const response = await fetch(`${API_URL}/snmp/templates`, {
       headers: getAuthHeaders()
     });
 
@@ -213,7 +213,7 @@ async function saveTemplate() {
 
   try {
     const method = id ? 'PUT' : 'POST';
-    const url = id ? `${API_URL}/templates/${id}` : `${API_URL}/templates`;
+    const url = id ? `${API_URL}/snmp/templates/${id}` : `${API_URL}/snmp/templates`;
 
     const response = await fetch(url, {
       method,
@@ -240,7 +240,7 @@ async function saveTemplate() {
 // View template
 window.viewTemplate = async function(id) {
   try {
-    const response = await fetch(`${API_URL}/templates/${id}`, {
+    const response = await fetch(`${API_URL}/snmp/templates/${id}`, {
       headers: getAuthHeaders()
     });
 
@@ -299,7 +299,7 @@ window.viewTemplate = async function(id) {
 // Edit template
 window.editTemplate = async function(id) {
   try {
-    const response = await fetch(`${API_URL}/templates/${id}`, {
+    const response = await fetch(`${API_URL}/snmp/templates/${id}`, {
       headers: getAuthHeaders()
     });
 
@@ -376,7 +376,7 @@ window.deleteTemplate = async function(id) {
   if (!confirm('Are you sure you want to delete this template?')) return;
 
   try {
-    const response = await fetch(`${API_URL}/templates/${id}`, {
+    const response = await fetch(`${API_URL}/snmp/templates/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
     });
