@@ -1,6 +1,8 @@
 // Network Tools - Real Network Analytics
 // Uses backend API to capture and analyze real network packets from your system
 
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
 let capturedPackets = [];
 let filteredPackets = [];
 let isCapturing = false;
@@ -61,7 +63,7 @@ function initNetworkTools() {
 // Load and display network interfaces
 async function loadNetworkInterfaces() {
   try {
-    const response = await fetch('/api/network/interfaces');
+    const response = await fetch('/api/network/interfaces', { headers: getAuthHeaders() });
     const result = await response.json();
 
     if (result.success && result.data) {
@@ -128,7 +130,7 @@ async function startCapture() {
     // Start packet capture on backend
     const response = await fetch('/api/sniffer/start', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ interface: selectedInterface })
     });
     
@@ -158,7 +160,7 @@ async function updateCaptureData() {
     if (!isCapturing) return;
     
     // Fetch packets from backend
-    const response = await fetch('/api/sniffer/packets');
+    const response = await fetch('/api/sniffer/packets', { headers: getAuthHeaders() });
     const result = await response.json();
     
     if (result.success && result.data) {
@@ -201,7 +203,10 @@ async function stopCapture() {
     updateCaptureStatus();
     
     // Stop capture on backend
-    await fetch('/api/sniffer/stop', { method: 'POST' });
+    await fetch('/api/sniffer/stop', { 
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
   } catch (error) {
     console.error('[Network Tools] Stop capture error:', error);
     addLogEntry('Error', `Stop capture failed: ${error.message}`, 'error');
@@ -442,7 +447,10 @@ async function clearCapture() {
       addLogEntry('System', 'All packets cleared', 'info');
       
       // Clear on backend
-      await fetch('/api/sniffer/clear', { method: 'POST' });
+      await fetch('/api/sniffer/clear', { 
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
     }
   } catch (error) {
     console.error('[Network Tools] Clear capture error:', error);
@@ -706,7 +714,9 @@ async function exportPackets() {
     }
 
     const format = document.getElementById('exportFormat')?.value || 'json';
-    const response = await fetch(`/api/sniffer/export?format=${encodeURIComponent(format)}`);
+    const response = await fetch(`/api/sniffer/export?format=${encodeURIComponent(format)}`, {
+      headers: getAuthHeaders()
+    });
 
     if (!response.ok) {
       throw new Error(`Server responded with ${response.status}`);
@@ -779,7 +789,7 @@ async function updateCaptureStatus() {
 
 async function fetchCaptureStats() {
   try {
-    const response = await fetch('/api/sniffer/stats');
+    const response = await fetch('/api/sniffer/stats', { headers: getAuthHeaders() });
     if (!response.ok) return null;
     const result = await response.json();
     return result.success ? result.data : null;
@@ -830,3 +840,11 @@ function clearLog() {
     console.error('[Network Tools] Clear log error:', error);
   }
 }
+// Export functions to global scope
+window.initNetworkTools = initNetworkTools;
+window.startCapture = startCapture;
+window.stopCapture = stopCapture;
+window.clearCapture = clearCapture;
+window.exportPackets = exportPackets;
+window.filterPackets = filterPackets;
+window.displayPacketDetails = displayPacketDetails;

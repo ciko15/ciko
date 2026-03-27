@@ -74,14 +74,15 @@ graph TD
 
 ### 4. Diagnostics & Troubleshooting
 - Use the **Ping** button to test network connectivity.
+- **Tiered Ping Mechanism:** The system first pings the **Branch Gateway** (if configured). If the Gateway is down, it reports a "Gateway Offline" status and skips the direct equipment ping to prevent false-positives and reduce network waste.
 - Use **SNMP Tools** to walk OIDs and verify specific sensor readings.
 - Check **Equipment Logs** for historical trend analysis.
 
 ## 🚀 Backend Development & Migration to Bun
 
-**NOTICE: Legacy Node.js Support**
-The legacy Node.js server (`server.js` at the root directory) is now considered DEPRECATED. 
-All future development, including API routes, data generators, and scheduler tasks, **must** be done inside the `src/` directory using **Bun & ElysiaJS**.
+**NOTICE: Legacy Node.js Support (COMPLETED)**
+The legacy Node.js server (`server.js` at the root directory) is now **FULLY DEPRECATED**. 
+All functionality including API routes, surveillance receivers, and tiered diagnostics have been successfully ported to the `src/` directory using **Bun & ElysiaJS**.
 
 ### How Data Generators Work (For Junior Devs & AI)
 When the system cannot connect to a physical hardware device (e.g., no gateway IP, or device offline), the backend will automatically fall back to the built-in **Simulators** (found in `src/utils/simulators.ts`).

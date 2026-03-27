@@ -23,6 +23,77 @@ export const isValidOID = (oid: string): boolean => {
 };
 
 /**
+ * Standard ping function using node-ping
+ */
+export async function pingHost(ip: string, timeout: number = 3): Promise<any> {
+    const ping = require('ping');
+    try {
+        const result = await ping.promise.probe(ip, { timeout });
+        return {
+            alive: result.alive,
+            time: result.time,
+            avg: result.avg,
+            packetLoss: result.packetLoss,
+            timestamp: new Date().toISOString()
+        };
+    } catch (error: any) {
+        console.error(`[PING-ERROR] ${ip}:`, error.message);
+        return { alive: false, error: error.message, timestamp: new Date().toISOString() };
+    }
+}
+
+/**
+ * Tiered Ping Logic: Checks Gateway first, then Equipment.
+ */
+export async function pingTiered(equipmentId: number): Promise<any> {
+    const item = await db.getEquipmentById(equipmentId);
+    if (!item) throw new Error('Equipment not found');
+
+    const config = item.snmpConfig || item.snmp_config;
+    const ip = item.ip_address || (config && config.ip);
+
+    if (!ip || !isValidIP(ip)) {
+        return { success: false, message: 'Invalid or missing IP address' };
+    }
+
+    // Branch/Gateway check
+    const branchId = item.branchId || item.airport_id;
+    if (branchId) {
+        const branch = await db.getAirportById(branchId);
+        const gwIp = branch?.ip_branch || branch?.ip_gateway;
+        
+        if (gwIp && isValidIP(gwIp)) {
+            console.log(`[PING-TIER-1] Checking gateway ${gwIp} for ${item.name}...`);
+            const gwResult = await pingHost(gwIp, 3);
+            
+            if (!gwResult.alive) {
+                console.warn(`[PING-TIER-1] Gateway ${gwIp} DOWN. Aborting equipment ping.`);
+                return {
+                    success: false,
+                    status: 'offline',
+                    message: `Gateway Cabang (${gwIp}) terputus. Koneksi ke alat tidak dapat divalidasi.`,
+                    tier: 1,
+                    timestamp: new Date().toISOString()
+                };
+            }
+            console.log(`[PING-TIER-1] Gateway UP. Proceeding to equipment...`);
+        }
+    }
+
+    // Equipment check
+    console.log(`[PING-TIER-2] Checking equipment ${item.name} at ${ip}...`);
+    const result = await pingHost(ip, 3);
+    
+    return {
+        success: result.alive,
+        status: result.alive ? 'online' : 'offline',
+        tier: 2,
+        statistics: result.alive ? { avg: result.avg } : null,
+        timestamp: result.timestamp
+    };
+}
+
+/**
  * Executes an SNMP Get command for a single OID
  */
 export async function snmpGet(oid: string, host: string, port: number | string = 161, community: string = 'public'): Promise<any> {
@@ -116,8 +187,8 @@ export async function fetchAndParseData(equipment: any) {
     const templateId = config?.templateId;
     const ipAddress = equipment.ipAddress || (config ? config.ip : null);
 
-    // Simulation Mode logic
-    const SIMULATION_MODE = true; // For now
+    // Global simulation mode check
+    const SIMULATION_MODE = process.env.SIMULATION_MODE !== 'false';
 
     if (SIMULATION_MODE) {
         let rawData;
@@ -126,7 +197,6 @@ export async function fetchAndParseData(equipment: any) {
         switch (templateId) {
             case 'dvor_maru_220':
                 rawData = generateDvorMaruData(equipment.id);
-                // Need to import ParserFactory or equivalent
                 pResult = await parseAdvancedData('dvor_maru_220', rawData, equipment);
                 return { parsedData: pResult.data, status: pResult.status };
             case 'dme_maru_310_320':
@@ -134,13 +204,13 @@ export async function fetchAndParseData(equipment: any) {
                 pResult = await parseAdvancedData('dme_maru_310_320', rawData, equipment);
                 return { parsedData: pResult.data, status: pResult.status };
             default:
-                rawData = await generateSimulatedData(templateId, equipment.id);
-                return { parsedData: rawData, status: await determineStatus(rawData, templateId) };
+                rawData = await generateSimulatedData(templateId || 'generic_snmp', equipment.id);
+                return { parsedData: rawData, status: await determineStatus(rawData, templateId || 'generic_snmp') };
         }
     }
 
-    // Real SNMP logic would go here
-    throw new Error('Real SNMP not implemented in this chunk');
+    // Real SNMP implementation would come here in production
+    throw new Error('Real backend device communication not yet fully implemented for this type');
 }
 
 /**

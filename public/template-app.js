@@ -3,7 +3,8 @@
  * TOC Project - Equipment Templates UI
  */
 
-var API_URL = '/api';
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {

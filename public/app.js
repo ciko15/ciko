@@ -1,18 +1,35 @@
 // API Base URL
-var API_URL = '/api';
-const DEBUG_MODE = true;
+// Global Variables
+window.API_URL = '/api';
+window.authToken = null;
+window.currentUser = null;
+window.liveDataTimer = null;
+window.autoRefreshTimer = null;
+window.isAutoRefreshEnabled = true;
+window.currentViewedEquipmentId = null;
+window.DEBUG_MODE = true;
 
 // Auto-refresh configuration (20 seconds)
 const AUTO_REFRESH_INTERVAL = 20000; // 20 seconds
-let autoRefreshTimer = null;
-let isAutoRefreshEnabled = true;
-let liveDataTimer = null; // Timer khusus untuk modal live (0.5 detik)
 
-// Track equipment data yang sedang dilihat untuk keperluan Live Update
-let currentViewedEquipmentId = null;
 
-function debugLog(msg, data) {
-  if (DEBUG_MODE) console.log(`[DEBUG] ${msg}`, data || '');
+// Auth Helpers
+window.getAuthHeaders = function() {
+  const h = { 'Content-Type': 'application/json' };
+  const token = window.authToken || localStorage.getItem('authToken');
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
+};
+
+window.debugLog = function(msg, data) {
+  if (window.DEBUG_MODE || (typeof DEBUG_MODE !== 'undefined' && DEBUG_MODE)) {
+    console.log(`[DEBUG] ${msg}`, data || '');
+  }
+};
+
+function initAuth() {
+  const t = localStorage.getItem('authToken');
+  if (t) window.authToken = t;
 }
 
 // ============================================
@@ -305,18 +322,7 @@ function initUserSearch() {
   }
 }
 
-// Auth
-let authToken = null;
-function initAuth() {
-  const t = localStorage.getItem('authToken');
-  if (t) authToken = t;
-}
-
-function getAuthHeaders() {
-  const h = { 'Content-Type': 'application/json' };
-  if (authToken) h['Authorization'] = `Bearer ${authToken}`;
-  return h;
-}
+// Auth functions moved to top
 
 // DOM Elements
 const loginModal = document.getElementById('loginModal');
@@ -380,7 +386,6 @@ const equipmentLogsTableBody = document.getElementById('equipmentLogsTableBody')
 
 let snmpTemplatesData = [];
 let equipmentLogsData = [];
-let currentUser = null;
 let publicMap = null;
 let map = null;
 let airportsData = [];
@@ -426,6 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSnmpTemplateModal();
   initEquipmentLogs();
   initUserSearch();
+  initDashboardFilters();
   
   if (authToken && currentUser) loadSnmpTemplates();
 });
@@ -1310,14 +1316,14 @@ function initEventListeners() {
 }
 
 // Helper function to normalize status values
-function normalizeStatus(status) {
+window.normalizeStatus = function(status) {
   if (!status) return 'Normal';
   const s = status.toString().toLowerCase();
-  if (s === 'alert' || s === 'critical') return 'Alert';
+  if (s === 'alert' || s === 'critical' || s === 'alarm') return 'Alert';
   if (s === 'warning') return 'Warning';
   if (s === 'disconnect' || s === 'disconnected' || s === 'offline') return 'Disconnect';
   return 'Normal';
-}
+};
 
 function toggleSidebar() {
   sidebar.classList.toggle('minimized');
@@ -1437,6 +1443,57 @@ async function updateDashboardStats(isAutoRefresh = false) {
     console.error('Error updating dashboard stats:', error);
     dashboardStatIds.forEach(id => showErrorState(id, 'Error'));
   }
+}
+
+// Function to initialize interactive filtering from Dashboard to Cabang
+function initDashboardFilters() {
+  // 1. Status Cards
+  const statusCards = document.querySelectorAll('#dashboardSection .stat-card');
+  statusCards.forEach(card => {
+    card.style.cursor = 'pointer';
+    card.title = 'Click to view in Cabang';
+    
+    card.addEventListener('click', () => {
+      const h3 = card.querySelector('h3');
+      if (!h3) return;
+      
+      const status = h3.textContent.trim();
+      debugLog(`[Dashboard] Filtering by status: ${status}`);
+      
+      // Navigate to Cabang
+      showApp('cabang');
+      
+      // Set Filters in Cabang Module
+      if (window.cabangModule && window.cabangModule.setFilters) {
+        // Map "Total" to undefined (show all)
+        const filterStatus = status === 'Total' ? '' : status;
+        window.cabangModule.setFilters(undefined, filterStatus);
+      }
+    });
+  });
+  
+  // 2. Category Items
+  const categoryItems = document.querySelectorAll('#dashboardSection .category-item');
+  categoryItems.forEach(item => {
+    item.style.cursor = 'pointer';
+    item.title = 'Click to view in Cabang';
+    
+    item.addEventListener('click', () => {
+      const h4 = item.querySelector('h4');
+      if (!h4) return;
+      
+      const category = h4.textContent.trim();
+      debugLog(`[Dashboard] Filtering by category: ${category}`);
+      
+      // Navigate to Cabang
+      showApp('cabang');
+      
+      // Set Filters in Cabang Module
+      if (window.cabangModule && window.cabangModule.setFilters) {
+        window.cabangModule.setFilters(category, undefined);
+      }
+    });
+  });
 }
 
 // FIX: Helper function to update airport equipment counts from equipment list

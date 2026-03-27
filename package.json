@@ -5,9 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:bun": "bun src/server.ts",
+    "start:bun": "/Users/vickra/.bun/bin/bun src/server.ts",
     "dev": "node server.js",
-    "dev:bun": "bun --watch src/server.ts",
+    "dev:bun": "/Users/vickra/.bun/bin/bun --watch src/server.ts",
     "init-db": "node db/init.js"
   },
   "keywords": [

@@ -1,6 +1,8 @@
 // Network Monitoring Dashboard
 // Real-time network statistics and connectivity monitoring
 
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
 let networkStats = [];
 let interfaceData = [];
 let trafficChart = null;
@@ -56,7 +58,7 @@ function initNetworkMonitor() {
 async function loadNetworkInterfaces() {
   try {
     console.log('[Network Monitor] Loading network interfaces...');
-    const response = await fetch('/api/network/interfaces');
+    const response = await fetch('/api/network/interfaces', { headers: getAuthHeaders() });
     const result = await response.json();
     
     if (result.success && result.data) {
@@ -118,7 +120,7 @@ function displayNetworkInterfaces(interfaces) {
 // Load network statistics
 async function loadNetworkStats() {
   try {
-    const response = await fetch('/api/network/stats');
+    const response = await fetch('/api/network/stats', { headers: getAuthHeaders() });
     const result = await response.json();
     
     if (result.success && result.data) {
@@ -190,7 +192,7 @@ async function testConnectivity() {
     
     const response = await fetch('/api/network/test-connectivity', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         hosts: ['8.8.8.8', '1.1.1.1', 'google.com']
       })
@@ -264,7 +266,7 @@ function displayConnectivityResults(results) {
 // Load system network information
 async function loadSystemNetworkInfo() {
   try {
-    const response = await fetch('/api/network/info');
+    const response = await fetch('/api/network/info', { headers: getAuthHeaders() });
     const result = await response.json();
     
     if (result.success && result.data) {
@@ -323,7 +325,7 @@ function addMonitorLog(source, message, type = 'info') {
 async function loadLocalNetworkInfo() {
   try {
     console.log('[Network Monitor] Loading local network info...');
-    const response = await fetch('/api/network/local-info');
+    const response = await fetch('/api/network/local-info', { headers: getAuthHeaders() });
     const result = await response.json();
     
     console.log('[Network Monitor] Local info response:', result);
@@ -373,7 +375,7 @@ function displayLocalNetworkInfo(info) {
 async function loadConnectedDevices() {
   try {
     console.log('[Network Monitor] Loading connected devices...');
-    const response = await fetch('/api/network/arp-table');
+    const response = await fetch('/api/network/arp-table', { headers: getAuthHeaders() });
     const result = await response.json();
     
     console.log('[Network Monitor] ARP table response:', result);
@@ -446,7 +448,7 @@ async function discoverNetworkDevices() {
     
     console.log('[Network Monitor] Scanning network for active devices...');
     
-    const response = await fetch('/api/network/discover-devices');
+    const response = await fetch('/api/network/discover-devices', { headers: getAuthHeaders() });
     const result = await response.json();
     
     if (result.success && result.data) {

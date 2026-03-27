@@ -1,4 +1,6 @@
 // Configuration Navigation Handler with State Management
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
 
 // State to track active sub-menu
 let activeSubMenu = 'snmp-templates';

@@ -1,4 +1,6 @@
 // SNMP Tools and Threshold Settings JavaScript Functions
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
 
 // ============================================
 // SNMP TOOLS FUNCTIONS

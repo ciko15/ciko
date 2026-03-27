@@ -9,6 +9,8 @@
  * - Clickable equipment cards with detail panel
  * - Auto-refresh every 15 seconds
  */
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
 
 const cabangModule = (function() {
   // State
@@ -16,6 +18,7 @@ const cabangModule = (function() {
   let equipmentData = [];
   let currentAirportFilter = '';
   let currentCategoryFilter = '';
+  let currentStatusFilter = '';
   let searchQuery = '';
   let autoRefreshInterval = null;
   
@@ -24,6 +27,7 @@ const cabangModule = (function() {
   const searchCabang = document.getElementById('searchCabang');
   const filterAirport = document.getElementById('filterCabangAirport');
   const filterCategory = document.getElementById('filterCabangCategory');
+  const filterStatus = document.getElementById('filterCabangStatus');
   const refreshBtn = document.getElementById('refreshCabangBtn');
   
   // Initialize
@@ -53,6 +57,13 @@ const cabangModule = (function() {
     if (filterCategory) {
       filterCategory.addEventListener('change', (e) => {
         currentCategoryFilter = e.target.value;
+        renderCabangGrid();
+      });
+    }
+    
+    if (filterStatus) {
+      filterStatus.addEventListener('change', (e) => {
+        currentStatusFilter = e.target.value;
         renderCabangGrid();
       });
     }
@@ -146,6 +157,14 @@ const cabangModule = (function() {
       filtered = filtered.filter(e => e.category === currentCategoryFilter);
     }
     
+    // Apply Status Filter
+    if (currentStatusFilter) {
+      filtered = filtered.filter(e => {
+        const normalized = window.normalizeStatus ? window.normalizeStatus(e.status) : e.status;
+        return normalized === currentStatusFilter;
+      });
+    }
+    
     // Apply Search
     if (searchQuery) {
       filtered = filtered.filter(e => 
@@ -235,11 +254,28 @@ const cabangModule = (function() {
   }
   
   return {
-    init,
-    loadAirports,
-    loadEquipment,
-    selectAirport,
-    setFilter,
+    init: init,
+    loadAirports: loadAirports,
+    loadEquipment: loadEquipment,
+    selectAirport: selectAirport,
+    setFilters: function(category, status) {
+      if (category !== undefined) {
+        currentCategoryFilter = category;
+        if (filterCategory) filterCategory.value = category;
+      }
+      if (status !== undefined) {
+        currentStatusFilter = status;
+        if (filterStatus) filterStatus.value = status;
+      }
+      // Reset other filters if we are coming from dashboard for a specific view
+      if (category !== undefined || status !== undefined) {
+        searchQuery = '';
+        if (searchCabang) searchCabang.value = '';
+        currentAirportFilter = '';
+        if (filterAirport) filterAirport.value = '';
+      }
+      renderCabangGrid();
+    },
     refresh: () => loadEquipment()
   };
 })();

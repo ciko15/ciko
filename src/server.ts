@@ -3,6 +3,9 @@ import { cors } from '@elysiajs/cors';
 import { staticPlugin } from '@elysiajs/static';
 import { jwt } from '@elysiajs/jwt';
 import { serverTiming } from '@elysiajs/server-timing';
+import bcrypt from 'bcryptjs';
+import ping from 'ping';
+
 
 // Import services and managers
 const db = require('../db/database');
@@ -30,6 +33,7 @@ try {
 
 const PORT = process.env.PORT || 3100;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+const saltRounds = 10;
 
 // Global State
 export const state = {
@@ -40,8 +44,15 @@ export const state = {
         radar_system: null,
         generic_snmp: null
     } as Record<string, any>,
-    simulationMode: true
+    simulationMode: true,
+    ping: {
+        interval: null as any,
+        results: [] as any[],
+        currentIp: null as string | null,
+        maxResults: 100
+    }
 };
+
 
 // Captcha Helper
 const generateCaptcha = () => {
@@ -205,6 +216,26 @@ const authorize = (roles: string[]) => ({ user, set }: any) => {
 const app = new Elysia()
     .use(cors())
     .use(serverTiming())
+    
+    // Web Application SEO & Aesthetics Implementation
+    // This server serves the modern Bun/Elysia backend and the static TOC frontend
+    
+    // --- GLOBAL ERROR HANDLER ---
+    .onError(({ code, error, set }) => {
+        if (code === 'NOT_FOUND') {
+            set.status = 404;
+            return { 
+                success: false, 
+                message: 'Endpoint NOT_FOUND. Pastikan URL dan Method (GET/POST) sudah benar.', 
+                error: 'Route not found in Elysia'
+            };
+        }
+        console.error(`[SERVER-ERROR] ${code}:`, error);
+        set.status = 500;
+        return { success: false, message: (error as any).message || 'Internal Server Error' };
+    })
+
+    // --- MIDDLEWARE & PLUGINS ---
     .use(staticPlugin({
         assets: 'public',
         prefix: '/'
@@ -231,13 +262,14 @@ const app = new Elysia()
                 }
 
                 try {
-                    const user = await db.getUserByUsername(username);
+                    const user = await db.findUserByUsername(username);
                     if (!user) {
                         set.status = 401;
                         return { message: 'User tidak ditemukan' };
                     }
 
-                    if (password !== user.password) {
+                    const isPasswordMatch = await bcrypt.compare(password, user.password);
+                    if (!isPasswordMatch) {
                         set.status = 401;
                         return { message: 'Password salah' };
                     }
@@ -324,12 +356,13 @@ const app = new Elysia()
         const equipmentData = allEquipment.data || allEquipment;
 
         return airports.map((airport: any) => {
-            const airportEquipment = equipmentData.filter((e: any) => e.airportId === airport.id || e.branchId === airport.id);
-            const activeEquipment = airportEquipment.filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1');
+            const airportId = airport.id;
+            const airportEquipment = equipmentData.filter((e: any) => e.airport_id === airportId || e.branch_id === airportId || e.airportId === airportId || e.branchId === airportId);
+            const activeEquipment = airportEquipment.filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1' || e.is_active === true);
             
             return {
                 ...airport,
-                status: getAirportStatus(airport.id, activeEquipment),
+                status: getAirportStatus(airportId, activeEquipment),
                 equipmentCount: getEquipmentCountByCategory(airportEquipment),
                 activeEquipmentCount: getEquipmentCountByCategory(activeEquipment),
                 totalEquipment: airportEquipment.length,
@@ -339,6 +372,117 @@ const app = new Elysia()
     })
 
     .get('/health', () => ({ status: 'ok', runtime: 'Bun', framework: 'Elysia' }))
+
+    // --- PROTECTED ROUTES ---
+    .use(authenticate)
+
+    // --- PING TOOL ROUTES ---
+    .group('/api/ping', (app) => 
+        app
+            .post('/start', async ({ body, set }) => {
+                const { ip, interval } = body as any;
+                
+                if (!ip || !interval) {
+                    set.status = 400;
+                    return { error: 'IP dan interval wajib diisi' };
+                }
+                
+                const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+                if (!ipRegex.test(ip)) {
+                    set.status = 400;
+                    return { error: 'Format IP tidak valid' };
+                }
+                
+                if (interval < 1 || interval > 60) {
+                    set.status = 400;
+                    return { error: 'Interval harus antara 1-60 detik' };
+                }
+                
+                // Clear existing
+                if (state.ping.interval) {
+                    clearInterval(state.ping.interval);
+                    state.ping.results = [];
+                }
+                
+                state.ping.currentIp = ip;
+                const intervalMs = interval * 1000;
+                
+                try {
+                    // Initial ping
+                    const { ping } = require('./utils/network');
+                    const result = await ping.promise.probe(ip, { timeout: 5 });
+                    
+                    state.ping.results.push({
+                        time: new Date().toISOString(),
+                        alive: result.alive,
+                        responseTime: result.time,
+                        host: ip
+                    });
+                    
+                    // Start interval
+                    state.ping.interval = setInterval(async () => {
+                        try {
+                            const pResult = await ping.promise.probe(ip, { timeout: 5 });
+                            state.ping.results.push({
+                                time: new Date().toISOString(),
+                                alive: pResult.alive,
+                                responseTime: pResult.time || 0,
+                                host: ip
+                            });
+                            
+                            if (state.ping.results.length > state.ping.maxResults) {
+                                state.ping.results = state.ping.results.slice(-state.ping.maxResults);
+                            }
+                        } catch (e: any) {
+                            console.error('[Ping] Error:', e.message);
+                        }
+                    }, intervalMs);
+                    
+                    return { 
+                        message: `Ping ke ${ip} setiap ${interval} detik dimulai`,
+                        ip: ip,
+                        interval: interval,
+                        status: result.alive ? 'online' : 'offline',
+                        responseTime: result.time
+                    };
+                } catch (error: any) {
+                    set.status = 500;
+                    return { error: error.message };
+                }
+            })
+            .post('/stop', () => {
+                if (state.ping.interval) {
+                    clearInterval(state.ping.interval);
+                    state.ping.interval = null;
+                    
+                    const result = {
+                        message: 'Ping dihentikan',
+                        ip: state.ping.currentIp,
+                        results: state.ping.results.length
+                    };
+                    
+                    state.ping.currentIp = null;
+                    return result;
+                }
+                return { message: 'Tidak ada ping aktif' };
+            })
+            .get('/status', () => {
+                return {
+                    active: state.ping.interval !== null,
+                    ip: state.ping.currentIp,
+                    results: state.ping.results,
+                    totalResults: state.ping.results.length
+                };
+            })
+            .get('/results', () => {
+                return {
+                    ip: state.ping.currentIp,
+                    active: state.ping.interval !== null,
+                    results: state.ping.results
+                };
+            })
+    )
+
 
     // --- PROTECTED ROUTES ---
     .use(authenticate)
@@ -457,47 +601,40 @@ const app = new Elysia()
             }, { beforeHandle: authorize(['admin', 'user_pusat']) })
             // Ping Equipment (Multi-tier)
             .get('/:id/ping', async ({ params, set }) => {
-                const { ip_address, isValidIP, snmpGet } = require('./utils/network');
+                const { pingTiered } = require('./utils/network');
                 try {
-                    const item = await db.getEquipmentById(params.id);
-                    if (!item) {
-                        set.status = 404;
-                        return { message: 'Equipment not found' };
+                    const result = await pingTiered(params.id);
+                    if (!result.success && result.tier === 0) { // Error
+                         set.status = 500;
+                         return result;
                     }
-                    
-                    const config = item.snmpConfig || item.snmp_config;
-                    const ip = item.ip_address || (config && config.ip);
-                    
-                    if (state.simulationMode) {
-                        const isAlive = Math.random() > 0.05;
-                        const mockRtt = Math.floor(Math.random() * 40) + 10;
-                        return {
-                            success: isAlive,
-                            equipmentId: item.id,
-                            equipmentName: item.name,
-                            ip: ip || 'simulated-ip',
-                            status: isAlive ? 'online' : 'offline',
-                            timestamp: new Date().toISOString()
-                        };
-                    }
-
+                    return result;
+                } catch (error: any) {
+                    set.status = 500;
+                    return { message: error.message };
+                }
+            })
+            // Manual Ping Test (Custom IP)
+            .post('/ping', async ({ body, set }) => {
+                const { pingHost, isValidIP } = require('./utils/network');
+                try {
+                    const { ip } = body as any;
                     if (!ip || !isValidIP(ip)) {
                         set.status = 400;
-                        return { message: 'Invalid IP configured' };
+                        return { success: false, message: 'Invalid IP address format' };
                     }
-
-                    const ping = require('ping');
-                    const result = await ping.promise.probe(ip, { timeout: 3 });
+                    
+                    const result = await pingHost(ip, 3);
                     return {
                         success: result.alive,
-                        equipmentId: item.id,
+                        ip: ip,
                         status: result.alive ? 'online' : 'offline',
-                        statistics: result.alive ? { avg: result.time } : null,
+                        statistics: result.alive ? { avg: result.avg } : null,
                         timestamp: new Date().toISOString()
                     };
                 } catch (error: any) {
                     set.status = 500;
-                    return { message: error.message };
+                    return { success: false, message: error.message };
                 }
             })
     )
@@ -596,8 +733,257 @@ const app = new Elysia()
                     return { success: false, message: error.message };
                 }
             })
+            .get('/data/:id', async ({ params, set }) => {
+                const { fetchAndParseData } = require('./utils/network');
+                try {
+                    const item = await db.getEquipmentById(params.id);
+                    if (!item) {
+                        set.status = 404;
+                        return { message: 'Equipment not found' };
+                    }
+                    
+                    const config = item.snmpConfig || item.snmp_config;
+                    if (!config || !config.enabled) {
+                        set.status = 404;
+                        return { message: 'SNMP not configured for this equipment' };
+                    }
+                    
+                    const { parsedData: data } = await fetchAndParseData(item);
+                    state.snmpDataCache[item.id] = data;
+                    return data;
+                } catch (error: any) {
+                    console.error(`[SNMP] Error for ${params.id}:`, error.message);
+                    if (state.snmpDataCache[params.id]) {
+                        return { ...state.snmpDataCache[params.id], error: error.message, cached: true };
+                    }
+                    set.status = 500;
+                    return { message: 'Failed to fetch SNMP data', error: error.message };
+                }
+            })
     )
     
+    // --- SURVEILLANCE ROUTES ---
+    .group('/api/surveillance', (app) =>
+        app
+            .get('/stations', async ({ query }) => {
+                const { type, airportId, isActive } = query;
+                const filters: any = {};
+                if (type) filters.type = type;
+                if (airportId) filters.airportId = parseInt(airportId as string);
+                if (isActive !== undefined) filters.isActive = isActive === 'true';
+                return await db.getAllSurveillanceStations(filters);
+            })
+            .get('/stations/:id', async ({ params, set }) => {
+                const station = await db.getSurveillanceStationById(params.id);
+                if (!station) {
+                    set.status = 404;
+                    return { message: 'Station not found' };
+                }
+                return station;
+            })
+            .post('/stations', async ({ body, set }) => {
+                const b = body as any;
+                const station = await db.createSurveillanceStation({
+                    ...b,
+                    port: parseInt(b.port),
+                    lat: b.lat ? parseFloat(b.lat) : null,
+                    lng: b.lng ? parseFloat(b.lng) : null,
+                    airportId: b.airportId ? parseInt(b.airportId) : null
+                });
+                set.status = 201;
+                return station;
+            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            .put('/stations/:id', async ({ params, body, set }) => {
+                const b = body as any;
+                const station = await db.updateSurveillanceStation(params.id, {
+                    ...b,
+                    port: b.port ? parseInt(b.port) : undefined,
+                    lat: b.lat ? parseFloat(b.lat) : undefined,
+                    lng: b.lng ? parseFloat(b.lng) : undefined,
+                    airportId: b.airportId ? parseInt(b.airportId) : undefined
+                });
+                if (!station) {
+                    set.status = 404;
+                    return { message: 'Station not found' };
+                }
+                return station;
+            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            .delete('/stations/:id', async ({ params }) => {
+                await db.deleteSurveillanceStation(params.id);
+                return { message: 'Station deleted' };
+            }, { beforeHandle: authorize(['admin']) })
+            .get('/radar/:stationId', async ({ params, query }) => {
+                const { limit = 100 } = query;
+                return await db.getRadarTargets(parseInt(params.stationId), {
+                    limit: parseInt(limit as string)
+                });
+            })
+            .get('/adsb', async ({ query }) => {
+                const { limit = 500 } = query;
+                return await db.getAdsbAircraft({
+                    limit: parseInt(limit as string)
+                });
+            })
+            .get('/status', async () => {
+                const stations = await db.getAllSurveillanceStations({});
+                const radarStations = stations.filter((s: any) => s.type === 'radar');
+                const adsbStations = stations.filter((s: any) => s.type === 'adsb');
+                
+                const radarTargets = await db.getRadarTargets(1, { limit: 1000 });
+                const adsbAircraft = await db.getAdsbAircraft({ limit: 1000 });
+                
+                return {
+                    radar: {
+                        totalStations: radarStations.length,
+                        activeStations: radarStations.filter((s: any) => s.isActive).length,
+                        totalTargets: radarTargets.length
+                    },
+                    adsb: {
+                        totalStations: adsbStations.length,
+                        activeStations: adsbStations.filter((s: any) => s.isActive).length,
+                        totalAircraft: adsbAircraft.length
+                    },
+                    stations: stations
+                };
+            })
+            .post('/fetch-asterix', async ({ body, set }) => {
+                const { stationId } = body as any;
+                const station = await db.getSurveillanceStationById(stationId);
+                if (!station) {
+                    set.status = 404;
+                    return { message: 'Station not found' };
+                }
+                
+                let targets = [];
+                let receiverStatus = 'disconnected';
+                
+                if (radarReceiver) {
+                    try {
+                        const result = await radarReceiver.fetchData(station.id);
+                        targets = result.targets || [];
+                        receiverStatus = result.status;
+                    } catch (err: any) {
+                        console.error('[API] Error fetching from radar receiver:', err.message);
+                    }
+                }
+                
+                if (targets.length === 0) {
+                    targets = await db.getRadarTargets(station.id, { limit: 50 });
+                }
+                
+                return {
+                    station,
+                    targets,
+                    receiverStatus,
+                    timestamp: new Date().toISOString()
+                };
+            })
+            .get('/logs', async ({ query }) => {
+                const { stationId, logType, severity, page = 1, limit = 100 } = query;
+                const filters: any = {};
+                if (stationId) filters.stationId = parseInt(stationId as string);
+                if (logType) filters.logType = logType;
+                if (severity) filters.severity = severity;
+                filters.page = parseInt(page as string);
+                filters.limit = parseInt(limit as string);
+                return await db.getSurveillanceLogs(filters);
+            })
+    )
+
+    // --- USER MANAGEMENT ROUTES ---
+    .group('/api/users', (app) =>
+        app
+            .use(authenticate)
+            .get('/', async ({ query, set }) => {
+                try {
+                    const { search } = query;
+                    const users = await db.getAllUsers({ search });
+                    return users;
+                } catch (error: any) {
+                    set.status = 500;
+                    return { message: error.message };
+                }
+            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            .get('/:id', async ({ params, set }) => {
+                try {
+                    const user = await db.getUserById(params.id);
+                    if (!user) {
+                        set.status = 404;
+                        return { message: 'User not found' };
+                    }
+                    return user;
+                } catch (error: any) {
+                    set.status = 500;
+                    return { message: error.message };
+                }
+            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            .post('/', async ({ body, set }) => {
+                try {
+                    let { username, password, name, role, branchId } = body as any;
+                    
+                    if (!password) {
+                        password = Math.random().toString(36).substring(2, 10);
+                    }
+                    
+                    const hashedPassword = await bcrypt.hash(password, saltRounds);
+                    
+                    const newUser = await db.createUser({
+                        username,
+                        password: hashedPassword,
+                        name,
+                        role,
+                        branchId: branchId || null
+                    });
+                    
+                    set.status = 201;
+                    return { ...newUser, tempPassword: !(body as any).password ? password : undefined };
+                } catch (error: any) {
+                    set.status = 500;
+                    if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
+                        set.status = 400;
+                        return { message: 'Username already exists' };
+                    }
+                    return { message: error.message };
+                }
+            }, { beforeHandle: authorize(['admin']) })
+            .put('/:id', async ({ params, body, set, user }) => {
+                try {
+                    const targetUser = await db.getUserById(params.id);
+                    if (!targetUser) {
+                        set.status = 404;
+                        return { message: 'User not found' };
+                    }
+                    
+                    if (targetUser.role === 'admin' && user.role !== 'admin') {
+                        set.status = 403;
+                        return { message: 'Cannot modify admin user' };
+                    }
+                    
+                    const { username, name, role, branchId, password } = body as any;
+                    const updateData: any = { username, name, role, branchId };
+                    
+                    if (password) {
+                        updateData.password = await bcrypt.hash(password, saltRounds);
+                    }
+                    
+                    const updated = await db.updateUser(params.id, updateData);
+                    return updated;
+                } catch (error: any) {
+                    set.status = 500;
+                    return { message: error.message };
+                }
+            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            .delete('/:id', async ({ params, set }) => {
+                try {
+                    await db.deleteUser(params.id);
+                    return { message: 'User deleted' };
+                } catch (error: any) {
+                    set.status = 500;
+                    return { message: error.message };
+                }
+            }, { beforeHandle: authorize(['admin']) })
+    )
+
     // --- THRESHOLD ROUTES ---
     .group('/api/equipment/:id/thresholds', (app) =>
         app
@@ -640,6 +1026,7 @@ const app = new Elysia()
     })
 
     // --- NETWORK MONITORING ROUTES ---
+    .group('/api/network', app => app.use(authenticate))
     .group('/api/network', (app) => {
         const networkMonitor = require('./network/monitor-fixed');
         return app
@@ -661,6 +1048,7 @@ const app = new Elysia()
     })
 
     // --- PACKET SNIFFER ROUTES ---
+    .group('/api/sniffer', app => app.use(authenticate))
     .group('/api/sniffer', (app) => {
         const packetSniffer = require('./network/sniffer');
         return app

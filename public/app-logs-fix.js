@@ -1,5 +1,11 @@
 // Equipment Logs Fix - Enhanced Error Handling + Pagination & Sorting
 // Include this file in index.html after app.js
+var API_URL = window.API_URL || '/api';
+var liveDataTimer = window.liveDataTimer;
+var equipmentLogsData = [];
+var equipmentLogsTableBody = document.getElementById('equipmentLogsTableBody');
+var filterLogEquipment = document.getElementById('filterLogEquipment');
+var filterLogSource = document.getElementById('filterLogSource');
 
 // Equipment Logs Pagination & Sorting State
 if (typeof logsPagination === 'undefined') {
@@ -128,11 +134,11 @@ window.loadEquipmentLogs = async function() {
     }
 
     const result = await response.json();
-    equipmentLogsData = result.data || [];
+    window.equipmentLogsData = result.data || [];
     
-    console.log(`[DEBUG] Successfully loaded ${equipmentLogsData.length} equipment logs`);
+    console.log(`[DEBUG] Successfully loaded ${window.equipmentLogsData.length} equipment logs`);
     
-    logsPagination.total = equipmentLogsData.length;
+    logsPagination.total = window.equipmentLogsData.length;
     logsPagination.totalPages = Math.ceil(logsPagination.total / logsPagination.pageSize);
     
     window.renderLogsWithPagination();
@@ -162,7 +168,7 @@ window.loadEquipmentLogs = async function() {
 
 // Render logs with pagination and sorting
 window.renderLogsWithPagination = function() {
-  if (!equipmentLogsData || equipmentLogsData.length === 0) {
+  if (!window.equipmentLogsData || window.equipmentLogsData.length === 0) {
     if (equipmentLogsTableBody) {
       equipmentLogsTableBody.innerHTML = `
         <tr>
@@ -174,7 +180,7 @@ window.renderLogsWithPagination = function() {
     return;
   }
   
-  const sortedData = [...equipmentLogsData].sort((a, b) => {
+  const sortedData = [...window.equipmentLogsData].sort((a, b) => {
     let valA, valB;
     
     switch (logsSort.column) {
@@ -361,7 +367,7 @@ window.updateSortIcons = function() {
 
 // Fixed viewLogDetail function - properly displays log details
 window.viewLogDetail = function(logId) {
-  const log = equipmentLogsData.find(l => (l.id || l['ID']) == logId);
+  const log = window.equipmentLogsData.find(l => (l.id || l['ID']) == logId);
   if (!log) {
     console.error('[DEBUG] Log not found:', logId);
     alert('Log not found');
