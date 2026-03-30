@@ -264,11 +264,16 @@ const cabangModule = (function() {
         if (filterCategory) filterCategory.value = category;
       }
       if (status !== undefined) {
-        currentStatusFilter = status;
-        if (filterStatus) filterStatus.value = status;
+        // Use global normalization if available, otherwise fallback to local normalization
+        const normalizedStatus = typeof window.normalizeStatus === 'function' 
+          ? window.normalizeStatus(status) 
+          : status;
+          
+        currentStatusFilter = normalizedStatus;
+        if (filterStatus) filterStatus.value = normalizedStatus;
       }
-      // Reset other filters if we are coming from dashboard for a specific view
-      if (category !== undefined || status !== undefined) {
+      // Reset search if we are coming from dashboard for a specific view
+      if (category !== undefined || (status !== undefined && status !== '')) {
         searchQuery = '';
         if (searchCabang) searchCabang.value = '';
         currentAirportFilter = '';
@@ -276,6 +281,7 @@ const cabangModule = (function() {
       }
       renderCabangGrid();
     },
+
     refresh: () => loadEquipment()
   };
 })();

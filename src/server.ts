@@ -764,6 +764,9 @@ const app = new Elysia()
             })
     )
     
+// --- AIRPORTS ROUTES (Gateway Status) ---
+    .use(require('../routes/airports'))
+
     // --- SURVEILLANCE ROUTES ---
     .group('/api/surveillance', (app) =>
         app

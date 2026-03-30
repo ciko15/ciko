@@ -123,7 +123,7 @@ class EquipmentService {
      * @param {number} equipmentId - Equipment ID
      * @returns {Promise<Object>} Collection result
      */
-    async collectFromEquipment(equipmentId) {
+async collectFromEquipment(equipmentId) {
         const equipment = await this.getEquipmentWithConfig(equipmentId);
         
         if (!equipment) {
@@ -135,7 +135,19 @@ class EquipmentService {
         }
 
         try {
-            // Test connection first
+            // ✅ NEW: Step 2.3 - Gateway-First Authentication
+            if (equipment.airport && equipment.airport.ip_branch && !equipment.bypassGateway) {
+                console.log(`[EquipmentService] Pinging gateway ${equipment.airport.ip_branch} for equipment ${equipment.id}`);
+                const gwTest = await connectionManager.testConnection(equipment.airport.ip_branch, 80, 3000); // 3s timeout
+                
+                if (!gwTest.success) {
+                    console.warn(`[EquipmentService] Gateway DOWN for equipment ${equipment.id}: ${gwTest.message}`);
+                    await this.updateEquipmentStatus(equipmentId, 'Disconnect', `Gateway ${equipment.airport.ip_branch} unreachable`);
+                    return { success: false, error: `Gateway unreachable: ${gwTest.message}`, tier: 'gateway' };
+                }
+            }
+
+            // Test direct equipment connection
             const connTest = await connectionManager.testConnection(equipment.host, equipment.port);
             
             if (!connTest.success) {

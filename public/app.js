@@ -928,12 +928,18 @@ if (sidebarUserName && currentUser.name) sidebarUserName.textContent = currentUs
   
   applyRoleAccess();
   
-  // Start auto-refresh for monitoring data
-  startAutoRefresh();
+  // Initialize dashboard interactive filters
+  initDashboardFilters();
   
+  // Choose initial section
   const savedSection = localStorage.getItem('currentSection') || 'dashboard';
-  restoreNavigation(savedSection);
+  if (typeof switchMainSection === 'function') {
+    switchMainSection(savedSection);
+  } else if (typeof restoreNavigation === 'function') {
+    restoreNavigation(savedSection);
+  }
 }
+
 
 function applyRoleAccess() {
   const ae = document.getElementById('addEquipmentBtn');
@@ -994,12 +1000,51 @@ function initModals() {
   if (addEquipmentBtn) addEquipmentBtn.addEventListener('click', () => { resetEquipmentForm(); equipmentModal.classList.remove('hidden'); });
   document.getElementById('closeEquipmentModal').addEventListener('click', () => equipmentModal.classList.add('hidden'));
   document.getElementById('cancelEquipmentEdit').addEventListener('click', () => { equipmentModal.classList.add('hidden'); resetEquipmentForm(); });
-  equipmentModal.addEventListener('click', e => { if (e.target === equipmentModal) { equipmentModal.classList.add('hidden'); resetEquipmentForm(); } });
+  // Robust equipment modal close
+  equipmentModal.addEventListener('click', e => {
+    if (e.target === equipmentModal) {
+      e.stopPropagation();
+      equipmentModal.classList.add('hidden');
+      resetEquipmentForm();
+    }
+  });
+  const equipCloseBtn = document.getElementById('closeEquipmentModal');
+  if (equipCloseBtn) {
+    equipCloseBtn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      equipmentModal.classList.add('hidden');
+      resetEquipmentForm();
+    });
+  }
   
   const sdm = document.getElementById('snmpDataModal');
   if (sdm) {
-    sdm.addEventListener('click', e => { if (e.target === sdm) { sdm.classList.add('hidden'); currentViewedEquipmentId = null; if (liveDataTimer) clearInterval(liveDataTimer); } });
-    document.getElementById('closeSnmpDataModal').addEventListener('click', () => { sdm.classList.add('hidden'); currentViewedEquipmentId = null; if (liveDataTimer) clearInterval(liveDataTimer); });
+    // Robust overlay close with stopPropagation
+    sdm.addEventListener('click', e => {
+      if (e.target === sdm) {
+        sdm.classList.add('hidden');
+        currentViewedEquipmentId = null;
+        if (liveDataTimer) {
+          clearInterval(liveDataTimer);
+          liveDataTimer = null;
+        }
+      }
+    });
+    // Robust close button with preventDefault
+    const closeBtn = document.getElementById('closeSnmpDataModal');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        sdm.classList.add('hidden');
+        currentViewedEquipmentId = null;
+        if (liveDataTimer) {
+          clearInterval(liveDataTimer);
+          liveDataTimer = null;
+        }
+      });
+    }
   }
   
   if (connectionMethodSelect) {
@@ -1058,10 +1103,80 @@ function updateThemeButton(t) {
   if (s) s.textContent = 'dark' === t ? 'Light Mode' : 'Dark Mode';
 }
 
+function switchMainSection(sectionId) {
+  debugLog(`Switching to section: ${sectionId}`);
+  
+  if (!contentSections || !navItems) return;
+  
+  // Hide all sections
+  contentSections.forEach(c => c.classList.add('hidden'));
+  
+  // Update nav active state
+  navItems.forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-dropdown-item, .nav-link').forEach(n => n.classList.remove('active'));
+  
+  const activeNavItem = document.querySelector(`.nav-item[data-section="${sectionId}"], .nav-dropdown-item[data-section="${sectionId}"]`);
+  if (activeNavItem) activeNavItem.classList.add('active');
+  
+  // Show target section
+  const section = document.getElementById(`${sectionId}Section`) || document.getElementById(`${sectionId}-templatesSection`); // compatibility
+  if (section) {
+    section.classList.remove('hidden');
+  } else {
+    console.warn(`Section not found: ${sectionId}Section`);
+    // Fallback search for a section with 'Section' suffix
+    const fallbackSection = document.querySelector(`[id^="${sectionId}"][id$="Section"]`);
+    if (fallbackSection) fallbackSection.classList.remove('hidden');
+  }
+  
+  // Update state
+  localStorage.setItem('currentSection', sectionId);
+  updateHeaderBreadcrumb(sectionId);
+  
+  // Specific module loads
+  switch(sectionId) {
+    case 'dashboard':
+      if (typeof updateDashboardStats === 'function') updateDashboardStats(true);
+      if (typeof initMap === 'function' && !window.map) initMap();
+      break;
+    case 'cabang':
+      if (window.cabangModule) {
+        window.cabangModule.loadAirports();
+        window.cabangModule.loadEquipment();
+      }
+      break;
+    case 'snmp-templates':
+      if (typeof loadSnmpTemplates === 'function') loadSnmpTemplates();
+      break;
+    case 'threshold-settings':
+      if (typeof initThresholdSettings === 'function') initThresholdSettings();
+      break;
+    case 'configuration':
+      if (typeof initConfigurationNav === 'function') initConfigurationNav();
+      break;
+    case 'surveillance':
+      if (typeof initSurveillanceApp === 'function') initSurveillanceApp();
+      break;
+    case 'equipment-logs':
+      if (typeof initEquipmentLogs === 'function') initEquipmentLogs();
+      if (typeof loadEquipmentLogs === 'function') loadEquipmentLogs();
+      break;
+  }
+
+  // Handle responsive sidebar behavior
+  if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('active')) {
+    sidebar.classList.remove('active');
+  }
+}
+
+
 function initNavigation() {
   if (!navItems || 0 === navItems.length) return;
-  const sv = localStorage.getItem('currentSection') || 'dashboard';
   
+  // Initial navigation based on saved state
+  const savedSection = localStorage.getItem('currentSection') || 'dashboard';
+  setTimeout(() => switchMainSection(savedSection), 100);
+
   // Handle dropdown menu toggle
   const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
   dropdownToggles.forEach(toggle => {
@@ -1114,7 +1229,7 @@ function initNavigation() {
       } else if ('airports' === s) {
         document.getElementById('airportsSection')?.classList.remove('hidden');
         initAirportsGrid();
-loadAirportsGrid();
+        loadAirportsGrid();
       } else if ('equipment-logs' === s) {
         if (authToken && currentUser) { loadEquipment(); loadEquipmentLogs(); }
         document.getElementById('equipmentLogsSection')?.classList.remove('hidden');
@@ -1252,7 +1367,7 @@ function restoreNavigation(s) {
         loadUsers();
       }
     } else if ('snmp-tools' === s) {
-      document.getElementById('snmpToolsSection')?.classList.remove('hidden');
+      document.getElementById('snmp-toolsSection')?.classList.remove('hidden');
       if (typeof initSnmpTools === 'function') {
         initSnmpTools();
       }
@@ -1471,21 +1586,31 @@ function initDashboardFilters() {
   const statusCards = document.querySelectorAll('#dashboardSection .stat-card');
   statusCards.forEach(card => {
     card.style.cursor = 'pointer';
-    card.title = 'Click to view in Cabang';
-    
+    card.title = 'Klik untuk melihat di Cabang';
+
     card.addEventListener('click', () => {
       const h3 = card.querySelector('h3');
       if (!h3) return;
-      
+
       const status = h3.textContent.trim();
-      debugLog(`[Dashboard] Filtering by status: ${status}`);
-      
-      // Navigate to Cabang
-      showApp('cabang');
-      
-      // Set Filters in Cabang Module
+      console.log(`[Dashboard] Filtering by status: ${status}`);
+
+      // Navigasi ke Cabang
+      if (typeof switchMainSection === 'function') {
+        switchMainSection('cabang');
+      } else {
+        // Fallback jika switchMainSection belum ada (meskipun seharusnya ada setelah update ini)
+        // Manual switch as seen in initNavigation
+        contentSections.forEach(c => c.classList.add('hidden'));
+        document.getElementById('cabangSection')?.classList.remove('hidden');
+        navItems.forEach(n => n.classList.remove('active'));
+        document.querySelector('.nav-item[data-section="cabang"]')?.classList.add('active');
+        localStorage.setItem('currentSection', 'cabang');
+        updateHeaderBreadcrumb('cabang');
+      }
+
+      // Set filter di modul Cabang
       if (window.cabangModule && window.cabangModule.setFilters) {
-        // Map "Total" to undefined (show all)
         const filterStatus = status === 'Total' ? '' : status;
         window.cabangModule.setFilters(undefined, filterStatus);
       }
@@ -1496,21 +1621,27 @@ function initDashboardFilters() {
   const categoryItems = document.querySelectorAll('#dashboardSection .category-item');
   categoryItems.forEach(item => {
     item.style.cursor = 'pointer';
-    item.title = 'Click to view in Cabang';
-    
+    item.title = 'Klik untuk melihat di Cabang';
+
     item.addEventListener('click', () => {
-      const h4 = item.querySelector('h4');
-      if (!h4) return;
-      
-      const category = h4.textContent.trim();
-      debugLog(`[Dashboard] Filtering by category: ${category}`);
-      
-      // Navigate to Cabang
-      showApp('cabang');
-      
-      // Set Filters in Cabang Module
+      const category = item.dataset.category;
+      console.log(`[Dashboard] Filtering by category: ${category}`);
+
+      // Navigasi ke Cabang
+      if (typeof switchMainSection === 'function') {
+        switchMainSection('cabang');
+      } else {
+        contentSections.forEach(c => c.classList.add('hidden'));
+        document.getElementById('cabangSection')?.classList.remove('hidden');
+        navItems.forEach(n => n.classList.remove('active'));
+        document.querySelector('.nav-item[data-section="cabang"]')?.classList.add('active');
+        localStorage.setItem('currentSection', 'cabang');
+        updateHeaderBreadcrumb('cabang');
+      }
+
+      // Set filter di modul Cabang
       if (window.cabangModule && window.cabangModule.setFilters) {
-        window.cabangModule.setFilters(category, undefined);
+        window.cabangModule.setFilters(category, '');
       }
     });
   });
@@ -3050,10 +3181,10 @@ window.pingEquipment = async function(equipmentId) {
           <p style="color: var(--text-secondary);">IP Address: <strong>${ip}</strong></p>
           <p style="color: var(--text-muted); font-size: 0.85rem;">Response time:</p>
           <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; margin-top: 10px;">
-            <p style="margin: 5px 0;">Min: <strong>${pingResult.statistics ? pingResult.statistics.min.toFixed(2) : 'N/A'} ms</strong></p>
-            <p style="margin: 5px 0;">Max: <strong>${pingResult.statistics ? pingResult.statistics.max.toFixed(2) : 'N/A'} ms</strong></p>
-            <p style="margin: 5px 0;">Avg: <strong>${pingResult.statistics ? pingResult.statistics.avg.toFixed(2) : 'N/A'} ms</strong></p>
-            <p style="margin: 5px 0;">Packet Loss: <strong>${pingResult.packets ? pingResult.packets.loss : '0%'}</strong></p>
+            <p style="margin: 5px 0;">Min: <strong>${(pingResult.statistics && pingResult.statistics.min != null) ? Number(pingResult.statistics.min).toFixed(2) : 'N/A'} ms</strong></p>
+            <p style="margin: 5px 0;">Max: <strong>${(pingResult.statistics && pingResult.statistics.max != null) ? Number(pingResult.statistics.max).toFixed(2) : 'N/A'} ms</strong></p>
+            <p style="margin: 5px 0;">Avg: <strong>${(pingResult.statistics && pingResult.statistics.avg != null) ? Number(pingResult.statistics.avg).toFixed(2) : 'N/A'} ms</strong></p>
+            <p style="margin: 5px 0;">Packet Loss: <strong>${pingResult.packets ? pingResult.packets.loss : (pingResult.statistics && pingResult.statistics.loss != null ? pingResult.statistics.loss : '0%')}</strong></p>
           </div>
         </div>
         <div style="text-align: center;">
@@ -3086,8 +3217,26 @@ window.pingEquipment = async function(equipmentId) {
   }
 };
 
+// FIXED: Robust snmpDataModal close handler
+document.addEventListener('DOMContentLoaded', function() {
+  const snmpModal = document.getElementById('snmpDataModal');
+  if (snmpModal) {
+    // ESC key close
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && !snmpModal.classList.contains('hidden')) {
+        snmpModal.classList.add('hidden');
+        if (window.liveDataTimer) {
+          clearInterval(window.liveDataTimer);
+          window.liveDataTimer = null;
+        }
+        window.currentViewedEquipmentId = null;
+      }
+    });
+  }
+});
+
 window.viewSnmpData = async function(equipmentId, silent = false) {
-  currentViewedEquipmentId = equipmentId; // Catat ID ini agar direfresh secara background
+  window.currentViewedEquipmentId = equipmentId;
 
   const equipment = equipmentData.find(e => e.id === equipmentId);
   const snmpConfig = equipment.snmp_config || {};
