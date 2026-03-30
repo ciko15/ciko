@@ -5,7 +5,8 @@
 -- Based on the schema, we need to find the correct airport IDs
 
 -- Insert Radar Stations (5 Papua Radar Stations)
-INSERT INTO surveillance_stations (name, type, ip, port, multicast_ip, lat, lng, airport_id, is_active, config) VALUES 
+-- Insert Radar Stations (5 Papua Radar Stations)
+INSERT IGNORE INTO surveillance_stations (name, type, ip, port, multicast_ip, lat, lng, airport_id, is_active, config) VALUES 
 -- Sentani Radar (ID 1 in airports)
 ('Sentani Radar', 'radar', '225.30.210.1', 4001, '225.30.210.1', -2.599, 140.528, 1, true, '{"category": "Primary Radar", "manufacturer": "ATCRDS", "model": "ASR-23"}'),
 -- Biak Radar (airport_id 11 based on schema)
@@ -15,11 +16,10 @@ INSERT INTO surveillance_stations (name, type, ip, port, multicast_ip, lat, lng,
 -- Sorong Radar (airport_id 51 based on schema)
 ('Sorong Radar', 'radar', '230.52.53.4', 21054, '230.52.53.4', -0.891, 131.288, (SELECT id FROM airports WHERE name = 'Domine Eduard Osok' LIMIT 1), true, '{"category": "Primary Radar", "manufacturer": "ATCRDS", "model": "ASR-23"}'),
 -- Timika Radar (airport_id 13 based on schema)
-('Timika Radar', 'radar', '230.52.53.2', 21052, '230.52.53.2', -4.528, 136.887, 13, true, '{"category": "Primary Radar", "manufacturer": "ATCRDS", "model": "ASR-23"}')
-ON CONFLICT DO NOTHING;
+('Timika Radar', 'radar', '230.52.53.2', 21052, '230.52.53.2', -4.528, 136.887, 13, true, '{"category": "Primary Radar", "manufacturer": "ATCRDS", "model": "ASR-23"}');
 
 -- Insert ADS-B Stations (13 Papua ADS-B Stations)
-INSERT INTO surveillance_stations (name, type, ip, port, multicast_ip, lat, lng, airport_id, is_active, config) VALUES 
+INSERT IGNORE INTO surveillance_stations (name, type, ip, port, multicast_ip, lat, lng, airport_id, is_active, config) VALUES 
 -- Sentani ADS-B
 ('Sentani ADS-B', 'adsb', '239.71.40.2', 50000, '239.71.40.2', -2.599, 140.528, 1, true, '{"category": "ADS-B", "manufacturer": "Mode-S", "model": "1090ES"}'),
 -- Biak ADS-B
@@ -45,8 +45,7 @@ INSERT INTO surveillance_stations (name, type, ip, port, multicast_ip, lat, lng,
 -- Kaimana ADS-B
 ('Kaimana ADS-B', 'adsb', '239.71.40.2', 50000, '239.71.40.2', -3.667, 133.733, (SELECT id FROM airports WHERE name LIKE '%Kaimana%' LIMIT 1), true, '{"category": "ADS-B", "manufacturer": "Mode-S", "model": "1090ES"}'),
 -- Manokwari ADS-B
-('Manokwari ADS-B', 'adsb', '239.71.40.2', 50000, '239.71.40.2', -0.892, 134.052, (SELECT id FROM airports WHERE name LIKE '%Rendani%' LIMIT 1), true, '{"category": "ADS-B", "manufacturer": "Mode-S", "model": "1090ES"}')
-ON CONFLICT DO NOTHING;
+('Manokwari ADS-B', 'adsb', '239.71.40.2', 50000, '239.71.40.2', -0.892, 134.052, (SELECT id FROM airports WHERE name LIKE '%Rendani%' LIMIT 1), true, '{"category": "ADS-B", "manufacturer": "Mode-S", "model": "1090ES"}');
 
 -- Verify inserted data
 SELECT * FROM surveillance_stations ORDER BY type, name;

@@ -2,7 +2,7 @@
 -- This adds radar and ADS-B equipment to the equipment table
 
 -- First, let's add radar equipment for each Papua radar station
-INSERT INTO equipment (name, code, category, status, airport_id, description, snmp_config, is_active) VALUES 
+INSERT IGNORE INTO equipment (name, code, category, status, airport_id, description, snmp_config, is_active) VALUES 
 -- Sentani Radar Equipment
 ('Primary Radar Sentani', 'RADAR-SENTANI-001', 'Surveillance', 'Normal', 1, 'Primary Surveillance Radar - ASTERIX CAT048', '{"enabled": true, "method": "asterix", "ip": "225.30.210.1", "port": 4001, "multicast_ip": "225.30.210.1", "templateId": "radar_system"}', true),
 ('ADS-B Receiver Sentani', 'ADSBS-SENTANI-001', 'Surveillance', 'Normal', 1, 'ADS-B Receiver Papua - 1090ES', '{"enabled": true, "method": "adsb", "ip": "239.71.40.2", "port": 50000, "multicast_ip": "239.71.40.2", "templateId": "adsb_receiver"}', true),
@@ -31,8 +31,7 @@ INSERT INTO equipment (name, code, category, status, airport_id, description, sn
 ('ADS-B Receiver Oksibil', 'ADSBS-OKSIBIL-001', 'Surveillance', 'Normal', 43, 'ADS-B Receiver Oksibil - 1090ES', '{"enabled": true, "method": "adsb", "ip": "239.71.40.2", "port": 50000, "multicast_ip": "239.71.40.2", "templateId": "adsb_receiver"}', true),
 ('ADS-B Receiver Wamena', 'ADSBS-WAMENA-001', 'Surveillance', 'Normal', 41, 'ADS-B Receiver Wamena - 1090ES', '{"enabled": true, "method": "adsb", "ip": "239.71.40.2", "port": 50000, "multicast_ip": "239.71.40.2", "templateId": "adsb_receiver"}', true),
 ('ADS-B Receiver Kaimana', 'ADSBS-KAIMANA-001', 'Surveillance', 'Normal', 49, 'ADS-B Receiver Kaimana - 1090ES', '{"enabled": true, "method": "adsb", "ip": "239.71.40.2", "port": 50000, "multicast_ip": "239.71.40.2", "templateId": "adsb_receiver"}', true),
-('ADS-B Receiver Manokwari', 'ADSBS-MANOKWARI-001', 'Surveillance', 'Normal', 50, 'ADS-B Receiver Manokwari - 1090ES', '{"enabled": true, "method": "adsb", "ip": "239.71.40.2", "port": 50000, "multicast_ip": "239.71.40.2", "templateId": "adsb_receiver"}', true)
-ON CONFLICT (code) DO NOTHING;
+('ADS-B Receiver Manokwari', 'ADSBS-MANOKWARI-001', 'Surveillance', 'Normal', 50, 'ADS-B Receiver Manokwari - 1090ES', '{"enabled": true, "method": "adsb", "ip": "239.71.40.2", "port": 50000, "multicast_ip": "239.71.40.2", "templateId": "adsb_receiver"}', true);
 
 -- Verify inserted equipment
 SELECT e.id, e.name, e.code, e.category, e.status, a.name as airport_name 

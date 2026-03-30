@@ -2019,6 +2019,14 @@ async function handleEquipmentSubmit(e) {
   // Get isActive from checkbox (default to true if not checked)
   const isActiveCheckbox = document.getElementById('equipmentActive');
   const isActive = isActiveCheckbox ? isActiveCheckbox.checked : true;
+
+  const bypassGatewayCheckbox = document.getElementById('equipmentBypassGateway');
+  const bypassGateway = bypassGatewayCheckbox ? bypassGatewayCheckbox.checked : false;
+
+  // Add bypassGateway to connectionConfig
+  if (connectionConfig) {
+    connectionConfig.bypassGateway = bypassGateway;
+  }
   
   const equipment = { 
     name,
@@ -2082,8 +2090,18 @@ window.editEquipment = function(id) {
       activeLabel.textContent = equipment.isActive !== false ? 'Active' : 'Inactive';
     }
   }
-  
+
+  // Set Bypass Gateway checkbox
+  const bypassGatewayCheckbox = document.getElementById('equipmentBypassGateway');
   const snmpConfig = equipment.snmp_config || {};
+  if (bypassGatewayCheckbox) {
+      bypassGatewayCheckbox.checked = snmpConfig.bypassGateway === true;
+      const bypassLabel = document.getElementById('bypassGatewayLabel');
+      if (bypassLabel) {
+          bypassLabel.textContent = snmpConfig.bypassGateway === true ? 'Standalone (Direct Ping)' : 'Tiered (Gateway Ping)';
+      }
+  }
+  
   const connectionMethod = snmpConfig.method || 'snmp';
   
   if (snmpConfig && snmpConfig.enabled) {

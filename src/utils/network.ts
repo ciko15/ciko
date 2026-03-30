@@ -49,8 +49,9 @@ export async function pingTiered(equipmentId: number): Promise<any> {
     const item = await db.getEquipmentById(equipmentId);
     if (!item) throw new Error('Equipment not found');
 
-    const config = item.snmpConfig || item.snmp_config;
-    const ip = item.ip_address || (config && config.ip);
+    const config = item.snmpConfig || item.snmp_config || {};
+    const ip = item.ip_address || config.ip;
+    const isBypassGateway = config.bypassGateway === true;
 
     if (!ip || !isValidIP(ip)) {
         return { success: false, message: 'Invalid or missing IP address' };
@@ -58,7 +59,7 @@ export async function pingTiered(equipmentId: number): Promise<any> {
 
     // Branch/Gateway check
     const branchId = item.branchId || item.airport_id;
-    if (branchId) {
+    if (branchId && !isBypassGateway) {
         const branch = await db.getAirportById(branchId);
         const gwIp = branch?.ip_branch || branch?.ip_gateway;
         
