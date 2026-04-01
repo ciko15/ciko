@@ -32,6 +32,8 @@ export async function pingHost(ip: string, timeout: number = 3): Promise<any> {
         return {
             alive: result.alive,
             time: result.time,
+            min: result.min,
+            max: result.max,
             avg: result.avg,
             packetLoss: result.packetLoss,
             timestamp: new Date().toISOString()
@@ -41,6 +43,7 @@ export async function pingHost(ip: string, timeout: number = 3): Promise<any> {
         return { alive: false, error: error.message, timestamp: new Date().toISOString() };
     }
 }
+
 
 /**
  * Tiered Ping Logic: Checks Gateway first, then Equipment.
@@ -83,16 +86,35 @@ export async function pingTiered(equipmentId: number): Promise<any> {
 
     // Equipment check
     console.log(`[PING-TIER-2] Checking equipment ${item.name} at ${ip}...`);
+    
+    // Special case for Localhost or Generate Source (Simulation)
+    if (ip === '127.0.0.1' || item.name.toLowerCase().includes('maru') || item.name.toLowerCase().includes('simulated')) {
+        return {
+            success: true,
+            status: 'online',
+            tier: 2,
+            statistics: { min: 0.1, max: 0.5, avg: 0.2 },
+            timestamp: new Date().toISOString(),
+            message: 'Simulated/Loopback device always online'
+        };
+    }
+
     const result = await pingHost(ip, 3);
     
     return {
         success: result.alive,
         status: result.alive ? 'online' : 'offline',
         tier: 2,
-        statistics: result.alive ? { avg: result.avg } : null,
+        statistics: result.alive ? { 
+            min: result.min || result.time, 
+            max: result.max || result.time, 
+            avg: result.avg || result.time,
+            loss: result.packetLoss
+        } : null,
         timestamp: result.timestamp
     };
 }
+
 
 /**
  * Executes an SNMP Get command for a single OID
@@ -182,35 +204,97 @@ export async function snmpGetBulk(oids: string[], host: string, port: number | s
 
 /**
  * Combines fetching and parsing logic for equipment
+ * Implementation follows strict requirement:
+ * 1. Authenticate Gateway (if not bypassed)
+ * 2. Authenticate Device
+ * 3. Fetch Raw Data (Simulated or Real)
+ * 4. Parse & Tag with IP
  */
 export async function fetchAndParseData(equipment: any) {
     const config = equipment.snmpConfig || equipment.snmp_config;
     const templateId = config?.templateId;
     const ipAddress = equipment.ipAddress || (config ? config.ip : null);
+    const isBypassGateway = config?.bypassGateway === true;
 
-    // Global simulation mode check
-    const SIMULATION_MODE = process.env.SIMULATION_MODE !== 'false';
-
-    if (SIMULATION_MODE) {
-        let rawData;
-        let pResult;
-
-        switch (templateId) {
-            case 'dvor_maru_220':
-                rawData = generateDvorMaruData(equipment.id);
-                pResult = await parseAdvancedData('dvor_maru_220', rawData, equipment);
-                return { parsedData: pResult.data, status: pResult.status };
-            case 'dme_maru_310_320':
-                rawData = generateDmeMaruData(equipment.id);
-                pResult = await parseAdvancedData('dme_maru_310_320', rawData, equipment);
-                return { parsedData: pResult.data, status: pResult.status };
-            default:
-                rawData = await generateSimulatedData(templateId || 'generic_snmp', equipment.id);
-                return { parsedData: rawData, status: await determineStatus(rawData, templateId || 'generic_snmp') };
+    // 1. PHASE 1: Authenticate Connection (Tiered Ping)
+    // Checking Gateway first
+    const branchId = equipment.branchId || equipment.airport_id;
+    if (branchId && !isBypassGateway) {
+        const branch = await db.getAirportById(branchId);
+        const gwIp = branch?.ip_branch || branch?.ip_gateway;
+        
+        if (gwIp && isValidIP(gwIp)) {
+            const gwResult = await pingHost(gwIp, 2);
+            if (!gwResult.alive) {
+                return { 
+                    parsedData: { status: 'Disconnect', message: `Gateway (${gwIp}) Unreachable` }, 
+                    status: 'Disconnect', 
+                    triggeredParameters: ['gateway'] 
+                };
+            }
         }
     }
 
-    // Real SNMP implementation would come here in production
+    // Checking Device
+    if (!ipAddress || !isValidIP(ipAddress)) {
+        return { 
+            parsedData: { status: 'Disconnect', message: 'Invalid Device IP' }, 
+            status: 'Disconnect', 
+            triggeredParameters: ['ip'] 
+        };
+    }
+
+    // For simulation or local loopback, we assume device is alive if gateway is alive
+    const isSimulated = ipAddress === '127.0.0.1' || equipment.name.toLowerCase().includes('maru') || equipment.name.toLowerCase().includes('simulated');
+    
+    if (!isSimulated) {
+        const devicePing = await pingHost(ipAddress, 2);
+        if (!devicePing.alive) {
+            return { 
+                parsedData: { status: 'Disconnect', message: 'Device Unreachable' }, 
+                status: 'Disconnect', 
+                triggeredParameters: ['device'] 
+            };
+        }
+    }
+
+    // 2. PHASE 2: Fetch Raw Data (Simulated or Real)
+    const SIMULATION_MODE = process.env.SIMULATION_MODE !== 'false';
+
+    if (SIMULATION_MODE) {
+        let simResult;
+
+        switch (templateId) {
+            case 'dvor_maru_220':
+                simResult = generateDvorMaruData(equipment.id, ipAddress);
+                break;
+            case 'dme_maru_310_320':
+                simResult = generateDmeMaruData(equipment.id, ipAddress);
+                break;
+            default:
+                simResult = await generateSimulatedData(templateId || 'generic_snmp', equipment.id, ipAddress);
+                break;
+        }
+
+        // 3. PHASE 3: Parsing & Tagging
+        if (templateId === 'dvor_maru_220' || templateId === 'dme_maru_310_320') {
+            const pResult = await parseAdvancedData(templateId, simResult.rawData, equipment);
+            return { 
+                parsedData: { ...pResult.data, _ip: simResult.ip, _timestamp: simResult.timestamp }, 
+                status: pResult.status, 
+                triggeredParameters: pResult.triggeredParameters || [] 
+            };
+        } else {
+            const evalResult = await determineStatus(simResult.rawData, templateId || 'generic_snmp');
+            return { 
+                parsedData: { ...simResult.rawData, _ip: simResult.ip, _timestamp: simResult.timestamp }, 
+                status: evalResult.status, 
+                triggeredParameters: evalResult.triggeredParameters 
+            };
+        }
+    }
+
+    // Real SNMP implementation...
     throw new Error('Real backend device communication not yet fully implemented for this type');
 }
 
@@ -227,8 +311,10 @@ export async function determineStatus(data: any, templateId: string) {
         template = null;
     }
 
+    let overallStatus = 'Normal';
+    let triggeredParameters: string[] = [];
+
     if (template && template.parameters && template.parameters.length > 0) {
-        let overallStatus = 'Normal';
         const statusPriority: Record<string, number> = { 'Alert': 3, 'Warning': 2, 'Normal': 1, 'Disconnect': 0 };
 
         for (const param of template.parameters) {
@@ -243,11 +329,14 @@ export async function determineStatus(data: any, templateId: string) {
             };
 
             const status = thresholdEvaluator.checkThreshold(valueObj.value, config);
+            if (status === 'Warning' || status === 'Alert') {
+                triggeredParameters.push(param.source || param.label);
+            }
             if (statusPriority[status] > statusPriority[overallStatus]) {
                 overallStatus = status;
             }
         }
-        return overallStatus;
+        return { status: overallStatus, triggeredParameters };
     }
 
     const defaultThresholds: Record<string, any> = {
@@ -271,7 +360,6 @@ export async function determineStatus(data: any, templateId: string) {
         }
     }
 
-    let status = 'Normal';
     for (const [key, valueObj] of Object.entries(data) as any) {
         if (!valueObj || valueObj.value === undefined) continue;
         const value = parseFloat(valueObj.value);
@@ -280,14 +368,24 @@ export async function determineStatus(data: any, templateId: string) {
         if (!threshold) continue;
         
         if (threshold.warningLow !== undefined && threshold.warningHigh !== undefined) {
-            if (value <= threshold.criticalLow || value >= threshold.criticalHigh) return 'Alert';
-            if (value <= threshold.warningLow || value >= threshold.warningHigh) status = 'Warning';
+            if (value <= threshold.criticalLow || value >= threshold.criticalHigh) {
+                overallStatus = 'Alert';
+                triggeredParameters.push(key);
+            } else if (value <= threshold.warningLow || value >= threshold.warningHigh) {
+                if (overallStatus !== 'Alert') overallStatus = 'Warning';
+                triggeredParameters.push(key);
+            }
         } else if (threshold.criticalThreshold !== undefined) {
-            if (value >= threshold.criticalThreshold) return 'Alert';
-            if (threshold.warningThreshold !== undefined && value >= threshold.warningThreshold) status = 'Warning';
+            if (value >= threshold.criticalThreshold) {
+                overallStatus = 'Alert';
+                triggeredParameters.push(key);
+            } else if (threshold.warningThreshold !== undefined && value >= threshold.warningThreshold) {
+                if (overallStatus !== 'Alert') overallStatus = 'Warning';
+                triggeredParameters.push(key);
+            }
         }
     }
-    return status;
+    return { status: overallStatus, triggeredParameters };
 }
 
 /**

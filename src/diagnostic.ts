@@ -20,20 +20,20 @@ async function diagnostic() {
     console.log('--- Database Diagnostic ---');
     console.log(`Connecting to: ${process.env.DB_NAME || 'db_2'} as ${process.env.DB_USER}`);
 
-    const [users] = await pool.query('SELECT count(*) as count FROM users');
+    const [users]: any = await pool.query('SELECT count(*) as count FROM users');
     console.log(`Users count: ${users[0].count}`);
 
-    const [equipmentTemplates] = await pool.query('SELECT count(*) as count FROM equipment_templates');
+    const [equipmentTemplates]: any = await pool.query('SELECT count(*) as count FROM equipment_templates');
     console.log(`Equipment Templates count: ${equipmentTemplates[0].count}`);
 
-    const [snmpTemplates] = await pool.query('SELECT count(*) as count FROM snmp_templates');
+    const [snmpTemplates]: any = await pool.query('SELECT count(*) as count FROM snmp_templates');
     console.log(`SNMP Templates count: ${snmpTemplates[0].count}`);
 
-    const [airports] = await pool.query('SELECT count(*) as count FROM airports');
+    const [airports]: any = await pool.query('SELECT count(*) as count FROM airports');
     console.log(`Airports count: ${airports[0].count}`);
 
     if (users[0].count > 0) {
-      const [userList] = await pool.query('SELECT id, username, role FROM users');
+      const [userList]: any = await pool.query('SELECT id, username, role FROM users');
       console.log('Users preview:', userList);
     }
 

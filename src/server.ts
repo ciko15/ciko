@@ -64,7 +64,9 @@ const generateCaptcha = () => {
 // --- BACKGROUND TASKS ---
 async function collectEquipmentData() {
     try {
-        const fetchAndParseData = require('./utils/network').fetchAndParseData;
+        const networkUtils = require('./utils/network');
+        const fetchAndParseData = networkUtils.fetchAndParseData;
+        const pingTiered = networkUtils.pingTiered;
         console.log('[SCHEDULER] Starting equipment data collection...');
         const allEquipment = await db.getAllEquipment({ limit: 10000 });
         const equipmentList = allEquipment.data || allEquipment;
@@ -73,11 +75,22 @@ async function collectEquipmentData() {
             const config = item.snmpConfig || item.snmp_config;
             if (config?.enabled) {
                 try {
-                    const { parsedData, status } = await fetchAndParseData(item);
+                    const pingResult = await pingTiered(item.id);
+                    if (!pingResult.success) {
+                        await db.updateEquipmentStatus(item.id, 'Disconnect');
+                        await db.createEquipmentLog({
+                            equipmentId: item.id,
+                            data: { status: 'Disconnect', message: pingResult.message || 'Device Unreachable' },
+                            source: config.templateId || 'snmp'
+                        });
+                        continue;
+                    }
+                    
+                    const { parsedData, status, triggeredParameters } = await fetchAndParseData(item);
                     await db.updateEquipmentStatus(item.id, status);
                     await db.createEquipmentLog({
                         equipmentId: item.id,
-                        data: { ...parsedData, status },
+                        data: { ...parsedData, status, triggeredParameters: triggeredParameters || [] },
                         source: config.templateId || 'snmp'
                     });
                 } catch (err: any) {
@@ -750,9 +763,10 @@ const app = new Elysia()
                         return { message: 'SNMP not configured for this equipment' };
                     }
                     
-                    const { parsedData: data } = await fetchAndParseData(item);
-                    state.snmpDataCache[item.id] = data;
-                    return data;
+                    const { parsedData: data, status, triggeredParameters } = await fetchAndParseData(item);
+                    const enrichedData = { ...data, _status: status, _triggered: triggeredParameters || [] };
+                    state.snmpDataCache[item.id] = enrichedData;
+                    return enrichedData;
                 } catch (error: any) {
                     console.error(`[SNMP] Error for ${params.id}:`, error.message);
                     if (state.snmpDataCache[params.id]) {
@@ -765,7 +779,68 @@ const app = new Elysia()
     )
     
 // --- AIRPORTS ROUTES (Gateway Status) ---
-    .use(require('../routes/airports'))
+    .group('/api/airports', (app) => 
+      app
+        .get('/gateway-status', async ({ query: { airportId }, set }) => {
+          try {
+            if (!airportId) {
+              set.status = 400;
+              return { success: false, error: 'airportId query parameter required' };
+            }
+            const airportIdNum = parseInt(airportId as string);
+            const airportQuery = 'SELECT id, name, ip_branch FROM airports WHERE id = ?';
+            const airports = await db.query(airportQuery, [airportIdNum]);
+            
+            if (!airports || airports.length === 0) {
+              set.status = 404;
+              return { 
+                success: false, 
+                error: 'Airport not found',
+                gatewayHealthy: false 
+              };
+            }
+            
+            const airport = airports[0];
+            const gatewayIp = airport.ip_branch;
+            
+            if (!gatewayIp || gatewayIp.trim() === '') {
+              return { 
+                success: true,
+                gatewayHealthy: false,
+                ip: null,
+                message: 'No gateway IP configured for this airport',
+                responseTime: null
+              };
+            }
+            
+            // Ping gateway IP (timeout 3s)
+            const ping = require('ping');
+            const result = await ping.promise.probe(gatewayIp, { timeout: 3 });
+            
+            const gatewayHealthy = result.alive;
+            
+            return {
+              success: true,
+              gatewayHealthy,
+              ip: gatewayIp,
+              responseTime: gatewayHealthy ? result.time : null,
+              message: gatewayHealthy ? 'Gateway reachable' : 'Gateway unreachable',
+              airport: {
+                id: airport.id,
+                name: airport.name
+              }
+            };
+          } catch (error) {
+            console.error('[Gateway Status] Error:', error);
+            set.status = 500;
+            return {
+              success: false,
+              error: 'Internal server error',
+              gatewayHealthy: false
+            };
+          }
+        })
+    )
 
     // --- SURVEILLANCE ROUTES ---
     .group('/api/surveillance', (app) =>

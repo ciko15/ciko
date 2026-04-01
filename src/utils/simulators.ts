@@ -4,7 +4,7 @@ const simulationState: Record<string, any> = {};
 /**
  * Generator for DVOR MARU 220 raw data (text-based)
  */
-export function generateDvorMaruData(equipmentId: string | number) {
+export function generateDvorMaruData(equipmentId: string | number, ip: string) {
     const stateKey = `${equipmentId}_dvor`;
     if (!simulationState[stateKey]) {
         simulationState[stateKey] = { 
@@ -53,13 +53,17 @@ export function generateDvorMaruData(equipmentId: string | number) {
     const g2Frame = `\x01\x02G2S11=${Math.round(state.tx2_v5)}|S12=${Math.round(state.tx2_v15)}|S13=${Math.round(state.tx2_v48)}|S20=1\x03`;
     const lcFrame = `\x01\x02LCS10=1\x03`;
 
-    return n1Frame + g1Frame + n2Frame + g2Frame + lcFrame;
+    return {
+        ip: ip,
+        rawData: n1Frame + g1Frame + n2Frame + g2Frame + lcFrame,
+        timestamp: new Date().toISOString()
+    };
 }
 
 /**
  * Generator for DME MARU 310/320 raw data (ASCII-HEX)
  */
-export function generateDmeMaruData(equipmentId: string | number) {
+export function generateDmeMaruData(equipmentId: string | number, ip: string) {
     const stateKey = `${equipmentId}_dme`;
     if (!simulationState[stateKey]) {
         simulationState[stateKey] = { 
@@ -98,14 +102,18 @@ export function generateDmeMaruData(equipmentId: string | number) {
     header.writeUInt16BE(0x7A, 6);
     const headerHex = header.toString('hex');
 
-    return `\x01${headerHex}\x02${payloadHex}\x03`;
+    return {
+        ip: ip,
+        rawData: `\x01${headerHex}\x02${payloadHex}\x03`,
+        timestamp: new Date().toISOString()
+    };
 }
 
 /**
  * Generate simulated SNMP data based on template
  */
-export async function generateSimulatedData(templateId: string, equipmentId: string | number = 'default') {
-  if (Math.random() > 0.95) {
+export async function generateSimulatedData(templateId: string, equipmentId: string | number = 'default', ip: string) {
+  if (Math.random() > 0.99) { // Reduced failure rate for testing
     throw new Error('Simulated Timeout: Device is unreachable');
   }
 
@@ -126,7 +134,7 @@ export async function generateSimulatedData(templateId: string, equipmentId: str
       if (typeof mappings === 'string') {
           try { mappings = JSON.parse(mappings); } catch (e) { mappings = {}; }
       }
-      const result: any = {};
+      const rawData: any = {};
       
       for (const [key, mapping] of Object.entries(mappings) as any) {
           let value;
@@ -159,21 +167,29 @@ export async function generateSimulatedData(templateId: string, equipmentId: str
               value = String(state[key]);
           }
           
-          result[key] = {
+          // Result is structured as raw OID-Value mapping for later parsing
+          rawData[key] = {
               oid: `${template.oidBase}.${mapping.oid}`,
               value: value,
               type: type,
               label: mapping.label || key,
-              unit: mapping.unit || '',
-              timestamp: new Date().toISOString()
+              unit: mapping.unit || ''
           };
       }
-      return result;
+      return {
+          ip,
+          rawData,
+          timestamp: new Date().toISOString()
+      };
   }
 
   // default mock
   return {
-    status: { value: 'Normal', type: 'STRING' },
-    value: { value: String(Math.round(25 + Math.random() * 5)), type: 'INTEGER' }
+    ip,
+    rawData: {
+      status: { value: 'Normal', type: 'STRING' },
+      value: { value: String(Math.round(25 + Math.random() * 5)), type: 'INTEGER' }
+    },
+    timestamp: new Date().toISOString()
   };
 }

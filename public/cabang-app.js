@@ -185,7 +185,15 @@ const cabangModule = (function() {
       
       // Action Data
       let dataHtml = '';
-      if (item.lastData) {
+      const hasIp = item.ipAddress && item.ipAddress.trim() !== '';
+      
+      if (!hasIp) {
+        dataHtml = `
+          <div class="empty-data unconfigured">
+            <i class="fas fa-network-wired"></i>
+            <span>No IP Configured</span>
+          </div>`;
+      } else if (item.lastData) {
         const dataKeys = Object.keys(item.lastData).filter(k => k !== 'error' && k !== 'cached').slice(0, 6);
         if (dataKeys.length > 0) {
           dataHtml = `<div class="card-data-grid">

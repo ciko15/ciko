@@ -8,6 +8,7 @@ window.autoRefreshTimer = null;
 window.isAutoRefreshEnabled = true;
 window.currentViewedEquipmentId = null;
 window.DEBUG_MODE = true;
+window.currentMapCategoryFilter = null;
 
 // Auto-refresh configuration (20 seconds)
 const AUTO_REFRESH_INTERVAL = 20000; // 20 seconds
@@ -912,7 +913,7 @@ if (sidebarUserName && currentUser.name) sidebarUserName.textContent = currentUs
   
   try { await loadAirports(); } catch (e) { console.error('Error loading airports:', e); }
   try { await loadAirportsToSelect(); } catch (e) { console.error('Error loading airports for select:', e); }
-  try { initMap(); } catch (e) { console.error('Error initializing map:', e); }
+  if (typeof initMap === 'function' && !window.map) initMap();
   try { await loadEquipment(); } catch (e) { console.error('Error loading equipment:', e); }
   try { loadUsers(); } catch (e) { console.error('Error loading users:', e); }
   
@@ -1138,6 +1139,7 @@ function switchMainSection(sectionId) {
     case 'dashboard':
       if (typeof updateDashboardStats === 'function') updateDashboardStats(true);
       if (typeof initMap === 'function' && !window.map) initMap();
+      if (typeof initMap === 'function' && !window.map) initMap();
       break;
     case 'cabang':
       if (window.cabangModule) {
@@ -1232,7 +1234,7 @@ function initNavigation() {
         loadAirportsGrid();
       } else if ('equipment-logs' === s) {
         if (authToken && currentUser) { loadEquipment(); loadEquipmentLogs(); }
-        document.getElementById('equipmentLogsSection')?.classList.remove('hidden');
+        document.getElementById('equipment-logsSection')?.classList.remove('hidden');
       } else if ('surveillance' === s) {
         document.getElementById('surveillanceSection')?.classList.remove('hidden');
         if (window.surveillanceModule) {
@@ -1270,7 +1272,7 @@ function initNavigation() {
         loadAirportsGrid();
       } else if ('equipment-logs' === s) {
         if (authToken && currentUser) { loadEquipment(); loadEquipmentLogs(); }
-        document.getElementById('equipmentLogsSection')?.classList.remove('hidden');
+        document.getElementById('equipment-logsSection')?.classList.remove('hidden');
       } else if ('snmp-templates' === s) {
         document.getElementById('snmp-templatesSection')?.classList.remove('hidden');
         if (typeof loadSnmpTemplates === 'function') {
@@ -1292,12 +1294,12 @@ function initNavigation() {
           initSnmpTools();
         }
       } else if ('threshold-settings' === s) {
-        document.getElementById('thresholdSettingsSection')?.classList.remove('hidden');
+        document.getElementById('threshold-settingsSection')?.classList.remove('hidden');
         if (typeof initThresholdSettings === 'function') {
           initThresholdSettings();
         }
       } else if ('network-monitor' === s) {
-        document.getElementById('networkMonitorSection')?.classList.remove('hidden');
+        document.getElementById('network-monitorSection')?.classList.remove('hidden');
         if (typeof initNetworkMonitor === 'function') {
           try {
             initNetworkMonitor();
@@ -1306,7 +1308,7 @@ function initNavigation() {
           }
         }
       } else if ('network-tools' === s) {
-        document.getElementById('networkToolsSection')?.classList.remove('hidden');
+        document.getElementById('network-toolsSection')?.classList.remove('hidden');
         // Initialize Network Tools when section is shown
         setTimeout(() => {
           if (typeof initNetworkTools === 'function') {
@@ -1326,7 +1328,7 @@ function initNavigation() {
     });
   });
   
-  if (authToken && currentUser) restoreNavigation(sv);
+if (authToken && currentUser) restoreNavigation();
 }
 
 function restoreNavigation(s) {
@@ -1350,7 +1352,7 @@ function restoreNavigation(s) {
       loadAirportsGrid();
     } else if ('equipment-logs' === s) {
       if (authToken && currentUser) { loadEquipment(); loadEquipmentLogs(); }
-      document.getElementById('equipmentLogsSection')?.classList.remove('hidden');
+      document.getElementById('equipment-logsSection')?.classList.remove('hidden');
     } else if ('snmp-templates' === s) {
       document.getElementById('snmp-templatesSection')?.classList.remove('hidden');
       if (typeof loadSnmpTemplates === 'function') {
@@ -1372,12 +1374,12 @@ function restoreNavigation(s) {
         initSnmpTools();
       }
     } else if ('threshold-settings' === s) {
-      document.getElementById('thresholdSettingsSection')?.classList.remove('hidden');
+      document.getElementById('threshold-settingsSection')?.classList.remove('hidden');
       if (typeof initThresholdSettings === 'function') {
         initThresholdSettings();
       }
     } else if ('network-tools' === s) {
-      document.getElementById('networkToolsSection')?.classList.remove('hidden');
+      document.getElementById('network-toolsSection')?.classList.remove('hidden');
       setTimeout(() => {
         if (typeof initNetworkTools === 'function') {
           try {
@@ -1387,10 +1389,10 @@ function restoreNavigation(s) {
           }
         }
       }, 100);
-    } else if ('snmp-tools' === s) {
-      document.getElementById('snmp-toolsSection')?.classList.remove('hidden');
-      if (typeof initSnmpTools === 'function') {
-        initSnmpTools();
+    } else if ('network-monitor' === s) {
+      document.getElementById('network-monitorSection')?.classList.remove('hidden');
+      if (typeof initNetworkMonitor === 'function') {
+        initNetworkMonitor();
       }
     } else {
       document.getElementById(`${s}Section`)?.classList.remove('hidden');
@@ -1621,28 +1623,23 @@ function initDashboardFilters() {
   const categoryItems = document.querySelectorAll('#dashboardSection .category-item');
   categoryItems.forEach(item => {
     item.style.cursor = 'pointer';
-    item.title = 'Klik untuk melihat di Cabang';
+    item.title = 'Klik untuk filter map';
 
     item.addEventListener('click', () => {
       const category = item.dataset.category;
-      console.log(`[Dashboard] Filtering by category: ${category}`);
+      console.log(`[Dashboard] Filtering map by category: ${category}`);
 
-      // Navigasi ke Cabang
-      if (typeof switchMainSection === 'function') {
-        switchMainSection('cabang');
+      // Toggle map filter
+      if (window.currentMapCategoryFilter === category) {
+          window.currentMapCategoryFilter = null;
+          categoryItems.forEach(i => i.style.opacity = '1');
       } else {
-        contentSections.forEach(c => c.classList.add('hidden'));
-        document.getElementById('cabangSection')?.classList.remove('hidden');
-        navItems.forEach(n => n.classList.remove('active'));
-        document.querySelector('.nav-item[data-section="cabang"]')?.classList.add('active');
-        localStorage.setItem('currentSection', 'cabang');
-        updateHeaderBreadcrumb('cabang');
+          window.currentMapCategoryFilter = category;
+          categoryItems.forEach(i => i.style.opacity = '0.4');
+          item.style.opacity = '1';
       }
 
-      // Set filter di modul Cabang
-      if (window.cabangModule && window.cabangModule.setFilters) {
-        window.cabangModule.setFilters(category, '');
-      }
+      updateMapMarkers();
     });
   });
 }
@@ -1797,7 +1794,15 @@ function updateMapMarkers() {
     Disconnect: { bg: '#6b7280', shadow: 'rgba(107,114,128,' }
   };
   
-  airportsData.forEach(airport => {
+  let airportsToRender = airportsData;
+  if (window.currentMapCategoryFilter && window.currentMapCategoryFilter !== 'Total') {
+      airportsToRender = airportsData.filter(airport => {
+          const count = airport.activeEquipmentCount ? (airport.activeEquipmentCount[window.currentMapCategoryFilter] || 0) : 0;
+          return count > 0;
+      });
+  }
+  
+  airportsToRender.forEach(airport => {
     const normalizedStatus = normalizeStatus(airport.status);
     const colors = markerColors[normalizedStatus] || markerColors.Normal;
     const isBranch = (airport.parentId || airport.parent_id) ? true : false;
@@ -3285,8 +3290,10 @@ window.viewSnmpData = async function(equipmentId, silent = false) {
     
     let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">';
     
+    const triggered = data._triggered || [];
+
     for (let [key, valueObj] of Object.entries(data)) {
-      if (key === 'error' || key === 'cached') continue;
+      if (key === 'error' || key === 'cached' || key === '_status' || key === '_triggered') continue;
       
       const isObject = valueObj !== null && typeof valueObj === 'object';
       let finalValue = isObject ? valueObj.value : valueObj;
@@ -3313,11 +3320,15 @@ window.viewSnmpData = async function(equipmentId, silent = false) {
         else if (finalValue === '1') finalValue = '<span style="color: #3b82f6; font-weight: bold;">High (1)</span>';
       }
       
+      const isTriggered = triggered.includes(key) || triggered.includes(finalLabel);
+      const textColor = isTriggered ? (data._status === 'Alert' ? '#ef4444' : '#f59e0b') : 'var(--text-primary)';
+      const warningIcon = isTriggered ? ` <i class="fas fa-exclamation-circle" style="color: ${textColor}; margin-left: 5px;" title="Threshold Exceeded"></i>` : '';
+
       html += `
-        <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border: 1px solid ${isTriggered ? textColor : 'var(--border-color)'};">
           <div style="color: var(--text-muted); font-size: 0.75rem; margin-bottom: 5px;">${finalLabel}</div>
-          <div style="color: var(--text-primary); font-size: 1.1rem; font-weight: 600; ${silent ? 'animation: highlightValue 1s ease-out;' : ''}">
-            ${finalValue} <span style="font-size: 0.85rem; color: var(--text-muted);">${finalUnit}</span>
+          <div style="color: ${textColor}; font-size: 1.1rem; font-weight: 600; ${silent ? 'animation: highlightValue 1s ease-out;' : ''}">
+            ${finalValue} <span style="font-size: 0.85rem; color: var(--text-muted);">${finalUnit}</span>${warningIcon}
           </div>
         </div>
       `;

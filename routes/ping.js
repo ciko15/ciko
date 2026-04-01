@@ -10,6 +10,12 @@ let currentIp = null;
 // Store max 100 results
 const MAX_RESULTS = 100;
 
+// Tambahkan null check untuk menghindari error pada toFixed()
+const safeToFixed = (value, digits) => {
+    if (value == null || isNaN(value)) return "N/A";
+    return Number(value).toFixed(digits);
+};
+
 router.post("/start", async (req, res) => {
     const { ip, interval } = req.body;
 
@@ -38,51 +44,36 @@ router.post("/start", async (req, res) => {
     const intervalMs = interval * 1000;
 
     // Do initial ping
-    const initialResult = await ping.promise.probe(ip, {
-        timeout: 5,
-    });
-    
-    pingResults.push({
-        time: new Date().toISOString(),
-        alive: initialResult.alive,
-        responseTime: initialResult.time,
-        host: ip
-    });
+    try {
+        const result = await ping.promise.probe(ip);
+        pingResults.push({
+            ip,
+            time: safeToFixed(result.time, 2),
+            status: result.alive ? "Alive" : "Dead",
+        });
+    } catch (error) {
+        console.error("Ping error:", error);
+    }
 
-    // Start interval
+    // Start interval ping
     pingInterval = setInterval(async () => {
         try {
-            const result = await ping.promise.probe(ip, {
-                timeout: 5,
+            const result = await ping.promise.probe(ip);
+            pingResults.push({
+                ip,
+                time: safeToFixed(result.time, 2),
+                status: result.alive ? "Alive" : "Dead",
             });
-            
-            const resultObj = {
-                time: new Date().toISOString(),
-                alive: result.alive,
-                responseTime: result.time || 0,
-                host: ip
-            };
-            
-            pingResults.push(resultObj);
-            
-            // Keep only last MAX_RESULTS
+
             if (pingResults.length > MAX_RESULTS) {
-                pingResults = pingResults.slice(-MAX_RESULTS);
+                pingResults.shift();
             }
-            
-            console.log(`[Ping] ${ip} - ${result.alive ? 'UP' : 'DOWN'} (${result.time}ms)`);
         } catch (error) {
-            console.error(`[Ping] Error:`, error.message);
+            console.error("Ping error:", error);
         }
     }, intervalMs);
 
-    res.json({ 
-        message: `Ping ke ${ip} setiap ${interval} detik dimulai`,
-        ip: ip,
-        interval: interval,
-        status: initialResult.alive ? 'online' : 'offline',
-        responseTime: initialResult.time
-    });
+    res.json({ message: "Ping started", ip, interval });
 });
 
 router.post("/stop", (req, res) => {

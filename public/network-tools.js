@@ -338,7 +338,7 @@ function displayPacketDetails(packetNumber) {
           </div>
           <div class="detail-item">
             <span class="label">Data Rate:</span>
-            <span class="value">${(packet.rate || 0).toFixed(2)} KB/s</span>
+            <span class="value">${(Number(packet.rate) || 0).toFixed(2)} KB/s</span>
           </div>
         </div>
       </div>
@@ -532,7 +532,7 @@ function displayPackets() {
     tbody.innerHTML = filteredPackets.map(packet => `
       <tr onclick="displayPacketDetails(${packet.number})" style="cursor: pointer;">
         <td>${packet.number}</td>
-        <td>${packet.time.toFixed(3)}s</td>
+        <td>${(Number(packet.time) || 0).toFixed(3)}s</td>
         <td>${packet.source}</td>
         <td>${packet.destination}</td>
         <td><span class="protocol-badge protocol-${packet.protocol.toLowerCase()}">${packet.protocol}</span></td>
@@ -564,7 +564,7 @@ function displayPacketDetails(packetNumber) {
           </div>
           <div class="detail-item">
             <span class="label">Time:</span>
-            <span class="value">${packet.time.toFixed(3)} seconds</span>
+            <span class="value">${(Number(packet.time) || 0).toFixed(3)} seconds</span>
           </div>
           <div class="detail-item">
             <span class="label">Length:</span>

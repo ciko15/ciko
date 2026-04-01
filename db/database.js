@@ -275,8 +275,16 @@ async function getAllEquipment(filters = {}) {
     const branchId = row.branch_id || row.airport_id;
     const branchName = row.branch_name || row.airport_name;
 
+    // FORCED DISCONNECT if IP is missing but SNMP/Monitoring is enabled
+    let finalStatus = row.status;
+    const isSnmpEnabled = snmpConfig && snmpConfig.enabled;
+    if (isSnmpEnabled && (!ipAddress || ipAddress.trim() === '')) {
+      finalStatus = 'Disconnect';
+    }
+
     return {
       ...row,
+      status: finalStatus,
       is_active: isActive,
       isActive: isActive,
       ip_address: ipAddress,
@@ -289,7 +297,7 @@ async function getAllEquipment(filters = {}) {
       airportId: row.airport_id,
       branchName: branchName,
       branchId: branchId,
-      hasSnmp: snmpConfig && snmpConfig.enabled
+      hasSnmp: isSnmpEnabled
     };
   });
   
@@ -370,9 +378,17 @@ async function getEquipmentById(id) {
   
   const branchId = rows[0].branch_id || rows[0].airport_id;
   const branchName = rows[0].branch_name || rows[0].airport_name;
+  const isSnmpEnabled = snmpConfig && snmpConfig.enabled;
+
+  // FORCED DISCONNECT if IP is missing but SNMP/Monitoring is enabled
+  let finalStatus = rows[0].status;
+  if (isSnmpEnabled && (!ipAddress || ipAddress.trim() === '')) {
+    finalStatus = 'Disconnect';
+  }
 
   return {
     ...rows[0],
+    status: finalStatus,
     is_active: isActive,
     snmp_config: snmpConfig,
     snmpConfig: snmpConfig,
@@ -380,7 +396,7 @@ async function getEquipmentById(id) {
     airportId: rows[0].airport_id,
     branchName: branchName,
     branchId: branchId,
-    hasSnmp: snmpConfig && snmpConfig.enabled,
+    hasSnmp: isSnmpEnabled,
     ipAddress: ipAddress
   };
 }

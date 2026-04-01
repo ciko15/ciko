@@ -65,6 +65,7 @@ function checkThreshold(value, config = {}) {
 function evaluateParameters(parameters, thresholds) {
   const parameterStatuses = {};
   let overallStatus = 'Normal';
+  const triggeredParameters = [];
 
   // Status priority order (highest to lowest)
   const statusPriority = { 'Alert': 3, 'Warning': 2, 'Normal': 1, 'Disconnect': 0 };
@@ -74,6 +75,10 @@ function evaluateParameters(parameters, thresholds) {
     const status = checkThreshold(value, config);
     parameterStatuses[paramName] = status;
 
+    if (status === 'Warning' || status === 'Alert') {
+      triggeredParameters.push(paramName);
+    }
+
     // Update overall status if this parameter has higher priority
     if (statusPriority[status] > statusPriority[overallStatus]) {
       overallStatus = status;
@@ -82,7 +87,8 @@ function evaluateParameters(parameters, thresholds) {
 
   return {
     overallStatus,
-    parameterStatuses
+    parameterStatuses,
+    triggeredParameters
   };
 }
 

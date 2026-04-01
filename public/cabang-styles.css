@@ -1706,6 +1706,24 @@
   border: 1px dashed var(--monitoring-border);
 }
 
+.empty-data.unconfigured {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--monitoring-danger);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 15px;
+  font-weight: 600;
+  font-style: normal;
+}
+
+.empty-data.unconfigured i {
+  font-size: 1.2rem;
+  opacity: 0.8;
+}
+
 .card-data-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

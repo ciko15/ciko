@@ -153,8 +153,8 @@ function displayTrafficStats(stats) {
       
       html += `<tr>
         <td style="font-weight: 500;">${stat.interface}</td>
-        <td style="color: #3b82f6;">📥 ${stat.rxRate.toFixed(2)} KB/s</td>
-        <td style="color: #10b981;">📤 ${stat.txRate.toFixed(2)} KB/s</td>
+        <td style="color: #3b82f6;">📥 ${(stat.rxRate ?? 0).toFixed(2)} KB/s</td>
+        <td style="color: #10b981;">📤 ${(stat.txRate ?? 0).toFixed(2)} KB/s</td>
         <td style="${rxColor}">${stat.rxErrors}</td>
         <td style="${txColor}">${stat.txErrors}</td>
         <td>${stat.rxDropped}</td>
@@ -241,19 +241,20 @@ function displayConnectivityResults(results) {
     for (const result of results) {
       const statusClass = result.reachable ? 'status-up' : 'status-down';
       const statusText = result.reachable ? '🟢 Reachable' : '🔴 Unreachable';
-      const loss = result.packetLoss || 100;
-      const packets = `${result.packetsTransmitted}/${result.packetsReceived}`;
-      const rtt = result.min && result.avg && result.max 
-        ? `${result.min.toFixed(1)}/${result.avg.toFixed(1)}/${result.max.toFixed(1)} ms`
+      const loss = result.packetLoss !== undefined ? result.packetLoss : 100;
+      const packets = `${result.packetsTransmitted || 0}/${result.packetsReceived || 0}`;
+      const rtt = (result.min != null && result.avg != null && result.max != null) 
+        ? `${Number(result.min).toFixed(1)}/${Number(result.avg).toFixed(1)}/${Number(result.max).toFixed(1)} ms`
         : 'N/A';
       
       html += `<tr>
         <td style="font-weight: 500; font-family: monospace;">${result.host}</td>
         <td><span class="${statusClass}">${statusText}</span></td>
         <td>${packets}</td>
-        <td>${loss.toFixed(1)}%</td>
+        <td>${Number(loss).toFixed(1)}%</td>
         <td>${rtt}</td>
       </tr>`;
+
     }
     
     html += '</tbody></table>';
