@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="referrer" content="no-referrer-when-downgrade">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment Management Dashboard</title>
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="cabang-styles.css">
+  <link rel="stylesheet" href="config-styles.css">
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet JS for Map -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Login Modal -->
+  <div class="login-modal hidden" id="loginModal">
+    <div class="login-container">
+      <div class="login-header">
+        <img src="icon.png" alt="Logo" class="login-logo">
+        <h2>Equipment Management</h2>
+        <p>Airport Navigation System</p>
+      </div>
+      <form id="loginForm" autocomplete="off">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" autocomplete="username" required placeholder="Enter username">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="Enter password">
+        </div>
+        <div class="form-group">
+          <label for="captchaAnswer">Captcha</label>
+          <div class="captcha-container">
+            <span id="captchaQuestion" class="captcha-question">Loading...</span>
+            <input type="text" id="captchaAnswer" name="captcha" autocomplete="off" required placeholder="Enter answer" style="margin-top: 8px;">
+          </div>
+        </div>
+        <input type="hidden" id="originalCaptchaAnswer">
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fas fa-sign-in-alt"></i> Login
+        </button>
+      </form>
+      <div class="login-info">
+        <p><strong>Demo Accounts:</strong></p>
+        <p>Admin: admin / admin123</p>
+        <p>Pusat: pusat / pusat123</p>
+        <p>Teknisi: teknisi_jayapura / teknisi123</p>
+        <p>User: user / tester123 (NEW)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Public Dashboard (No Login) -->
+  <div class="public-dashboard" id="publicDashboard">
+    <div class="public-header">
+      <div class="logo-container">
+        <img src="icon.png" alt="Logo" class="sidebar-logo">
+        <h2>Technical Operation Center</h2>
+      </div>
+      <button class="btn btn-primary" id="loginBtn">
+        <i class="fas fa-sign-in-alt"></i> Login
+      </button>
+    </div>
+    <div class="public-content">
+      <div class="public-stats">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-tools"></i></div>
+          <div class="stat-info">
+            <h3>Total</h3>
+            <p class="stat-number" id="publicTotalEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon available"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info">
+            <h3>Normal</h3>
+            <p class="stat-number" id="publicNormalEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon in-use"><i class="fas fa-exclamation-triangle"></i></div>
+          <div class="stat-info">
+            <h3>Warning</h3>
+            <p class="stat-number" id="publicWarningEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon maintenance"><i class="fas fa-times-circle"></i></div>
+          <div class="stat-info">
+            <h3>Alert</h3>
+            <p class="stat-number" id="publicAlertEquipment">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon disconnect"><i class="fas fa-unlink"></i></div>
+          <div class="stat-info">
+            <h3>Disconnect</h3>
+            <p class="stat-number" id="publicDisconnectEquipment">0</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card map-card">
+        <div class="card-body">
+          <div id="publicMapContainer" class="map-container"></div>
+          <div class="map-legend">
+            <span class="legend-item"><span class="legend-dot normal"></span> Normal</span>
+            <span class="legend-item"><span class="legend-dot warning"></span> Warning</span>
+            <span class="legend-item"><span class="legend-dot alert"></span> Alert</span>
+            <span class="legend-item"><span class="legend-dot disconnect"></span> Disconnect</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Equipment by Category - Public View -->
+      <div class="category-card">
+        <!-- <div class="card-header">
+          <h2><i class="fas fa-chart-pie"></i> Equipment by Category</h2>
+        </div> -->
+        <!-- <div class="card-body"> -->
+          <div class="category-stats" id="publicCategoryStats">
+            <div class="category-item">
+              <div class="category-icon" style="background: #3b82f6;"><i class="fas fa-tower-broadcast"></i></div>
+              <div class="category-info">
+                <h4>Communication</h4>
+                <p id="publicCommCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #10b981;"><i class="fas fa-compass"></i></div>
+              <div class="category-info">
+                <h4>Navigation</h4>
+                <p id="publicNavCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #f59e0b;"><i class="fas fa-satellite-dish"></i></div>
+              <div class="category-info">
+                <h4>Surveillance</h4>
+                <p id="publicSurvCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #8b5cf6;"><i class="fas fa-server"></i></div>
+              <div class="category-info">
+                <h4>Data Processing</h4>
+                <p id="publicDataCount">0</p>
+              </div>
+            </div>
+            <div class="category-item">
+              <div class="category-icon" style="background: #ef4444;"><i class="fas fa-bolt"></i></div>
+              <div class="category-info">
+                <h4>Support</h4>
+                <p id="publicSupportCount">0</p>
+              </div>
+            </div>
+          </div>
+        <!-- </div> -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Logout Confirmation Modal -->
+  <div class="modal-overlay hidden" id="logoutModal">
+    <div class="modal-container logout-modal-container">
+      <div class="modal-header logout-modal-header">
+        <h3><i class="fas fa-sign-out-alt"></i> Confirm Logout</h3>
+      </div>
+      <div class="modal-body logout-modal-body">
+        <p>Are you sure you want to logout?</p>
+      </div>
+      <div class="modal-footer logout-modal-footer">
+        <button class="btn btn-dangerlogout-modal-btn" id="cancelLogout">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+        <button class="btn btn-danger logout-modal-btn" id="confirmLogout">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipment Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="equipmentModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-tools"></i> <span id="modalFormTitle">Add New Equipment</span></h3>
+        <button class="modal-close" id="closeEquipmentModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="equipmentForm" autocomplete="off">
+          <input type="hidden" id="equipmentId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentName">Equipment Name</label>
+              <input type="text" id="equipmentName" name="equipmentName" autocomplete="off" required placeholder="Enter equipment name">
+            </div>
+            <div class="form-group">
+              <label for="equipmentCode">Code</label>
+              <input type="text" id="equipmentCode" name="equipmentCode" autocomplete="off" required placeholder="COM-001">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentCategory">Category</label>
+              <select id="equipmentCategory" name="equipmentCategory" required>
+                <option value="">Select Category</option>
+                <option value="Communication">Communication</option>
+                <option value="Navigation">Navigation</option>
+                <option value="Surveillance">Surveillance</option>
+                <option value="Data Processing">Data Processing</option>
+                <option value="Support">Support</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="equipmentAirport">Airport</label>
+              <select id="equipmentAirport" name="equipmentAirport" required>
+                <option value="">Select Airport</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentStatus">Status</label>
+              <select id="equipmentStatus" name="equipmentStatus" required>
+                <option value="Normal">Normal</option>
+                <option value="Warning">Warning</option>
+                <option value="Alert">Alert</option>
+                <option value="Disconnect">Disconnect</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="equipmentActive">Status Aktif</label>
+              <div class="toggle-switch-container">
+                <label class="switch">
+                  <input type="checkbox" id="equipmentActive" name="equipmentActive" checked>
+                  <span class="slider round"></span>
+                </label>
+                <span class="toggle-label" id="equipmentActiveLabel">Active</span>
+              </div>
+              <small style="color: var(--text-muted); display: block; margin-top: 4px;">Nonaktifkan untuk menyembunyikan dari hitungan dashboard</small>
+            </div>
+            <div class="form-group">
+              <label for="equipmentBypassGateway">Bypass Gateway Ping</label>
+              <div class="toggle-switch-container">
+                <label class="switch">
+                  <input type="checkbox" id="equipmentBypassGateway" name="equipmentBypassGateway">
+                  <span class="slider round"></span>
+                </label>
+                <span class="toggle-label" id="bypassGatewayLabel">Standalone (Direct Ping)</span>
+              </div>
+              <small style="color: var(--text-muted); display: block; margin-top: 4px;">Abaikan status Gateway Cabang dan langsung ping ke alat</small>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="equipmentDescription">Description</label>
+            <textarea id="equipmentDescription" name="equipmentDescription" rows="2" autocomplete="off" placeholder="Enter description"></textarea>
+          </div>
+          
+          <!-- Connection Method Configuration -->
+          <div class="connection-config-section">
+            <h4><i class="fas fa-plug"></i> Connection Method</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="connectionMethod">Connection Type</label>
+                <select id="connectionMethod" name="connectionMethod">
+                  <option value="snmp">SNMP (Simple Network Management Protocol)</option>
+                  <option value="json">JSON File / API</option>
+                  <option value="serial">Serial Port (RS232/RS485)</option>
+                  <option value="tcp_serial">TCP-to-Serial Bridge (Serial via LAN)</option>
+                  <option value="tcp">TCP/IP Custom</option>
+                  <option value="mqtt">MQTT Broker</option>
+                  <option value="modbus">Modbus TCP/RTU</option>
+                </select>
+              </div>
+              <div class="form-group" id="connectionTemplateGroup">
+                <label for="connectionTemplate">Device Template</label>
+                <select id="connectionTemplate" name="connectionTemplate">
+                  <option value="">Select Template</option>
+                  <option value="moxa_ioThinx_4150">MOXA ioThinx 4150</option>
+                  <option value="generic_snmp">Generic SNMP Device</option>
+                  <option value="radar_system">Radar System</option>
+                  <option value="generic_json">Generic JSON Device</option>
+                  <option value="generic_modbus">Generic Modbus Device</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- SNMP Fields -->
+            <div class="connection-fields" id="snmpFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="snmpIP">IP Address</label>
+                  <input type="text" id="snmpIP" name="snmpIP" autocomplete="off" placeholder="10.18.141.202">
+                </div>
+                <div class="form-group">
+                  <label for="snmpPort">Port</label>
+                  <input type="number" id="snmpPort" name="snmpPort" autocomplete="off" placeholder="161" value="161">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="snmpCommunity">Community</label>
+                  <input type="text" id="snmpCommunity" name="snmpCommunity" autocomplete="off" placeholder="public" value="public">
+                </div>
+              </div>
+            </div>
+            
+            <!-- JSON/API Fields -->
+            <div class="connection-fields" id="jsonFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="jsonURL">API URL / File Path</label>
+                  <input type="text" id="jsonURL" name="jsonURL" autocomplete="off" placeholder="http://192.168.1.100/api/data or /path/to/file.json">
+                </div>
+                <div class="form-group">
+                  <label for="jsonInterval">Polling Interval (seconds)</label>
+                  <input type="number" id="jsonInterval" name="jsonInterval" autocomplete="off" placeholder="30" value="30">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="jsonAuth">Authentication</label>
+                  <select id="jsonAuth" name="jsonAuth">
+                    <option value="none">None</option>
+                    <option value="basic">Basic Auth</option>
+                    <option value="bearer">Bearer Token</option>
+                  </select>
+                </div>
+                <div class="form-group" id="jsonAuthField" style="display: none;">
+                  <label for="jsonAuthValue">Auth Value</label>
+                  <input type="text" id="jsonAuthValue" name="jsonAuthValue" autocomplete="off" placeholder="token or credentials">
+                </div>
+              </div>
+            </div>
+            
+            <!-- Serial Fields -->
+            <div class="connection-fields" id="serialFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="serialPort">Port</label>
+                  <input type="text" id="serialPort" name="serialPort" autocomplete="off" placeholder="/dev/ttyUSB0 or COM1">
+                </div>
+                <div class="form-group">
+                  <label for="serialBaud">Baud Rate</label>
+                  <select id="serialBaud" name="serialBaud">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="serialDataBits">Data Bits</label>
+                  <select id="serialDataBits" name="serialDataBits">
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="serialStopBits">Stop Bits</label>
+                  <select id="serialStopBits" name="serialStopBits">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- TCP-to-Serial Bridge Fields -->
+            <div class="connection-fields" id="tcpSerialFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpSerialBridgeIP">Bridge IP Address</label>
+                  <input type="text" id="tcpSerialBridgeIP" name="tcpSerialBridgeIP" autocomplete="off" placeholder="192.168.1.100">
+                </div>
+                <div class="form-group">
+                  <label for="tcpSerialBridgePort">Bridge Port</label>
+                  <input type="number" id="tcpSerialBridgePort" name="tcpSerialBridgePort" autocomplete="off" placeholder="9000" value="9000">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpSerialRemotePort">Remote Serial Port</label>
+                  <input type="text" id="tcpSerialRemotePort" name="tcpSerialRemotePort" autocomplete="off" placeholder="/dev/ttyUSB0 or COM1">
+                </div>
+                <div class="form-group">
+                  <label for="tcpSerialBaud">Baud Rate</label>
+                  <select id="tcpSerialBaud" name="tcpSerialBaud">
+                    <option value="9600">9600</option>
+                    <option value="19200">19200</option>
+                    <option value="38400">38400</option>
+                    <option value="57600">57600</option>
+                    <option value="115200">115200</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpSerialDataBits">Data Bits</label>
+                  <select id="tcpSerialDataBits" name="tcpSerialDataBits">
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tcpSerialStopBits">Stop Bits</label>
+                  <select id="tcpSerialStopBits" name="tcpSerialStopBits">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- TCP Fields -->
+            <div class="connection-fields" id="tcpFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpIP">IP Address</label>
+                  <input type="text" id="tcpIP" name="tcpIP" autocomplete="off" placeholder="192.168.1.100">
+                </div>
+                <div class="form-group">
+                  <label for="tcpPort">Port</label>
+                  <input type="number" id="tcpPort" name="tcpPort" autocomplete="off" placeholder="5000">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpProtocol">Protocol</label>
+                  <select id="tcpProtocol" name="tcpProtocol">
+                    <option value="raw">Raw TCP</option>
+                    <option value="http">HTTP</option>
+                    <option value="websocket">WebSocket</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- MQTT Fields -->
+            <div class="connection-fields" id="mqttFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mqttBroker">Broker URL</label>
+                  <input type="text" id="mqttBroker" name="mqttBroker" autocomplete="off" placeholder="mqtt://192.168.1.100:1883">
+                </div>
+                <div class="form-group">
+                  <label for="mqttTopic">Topic</label>
+                  <input type="text" id="mqttTopic" name="mqttTopic" autocomplete="off" placeholder="sensors/data">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mqttClientId">Client ID</label>
+                  <input type="text" id="mqttClientId" name="mqttClientId" autocomplete="off" placeholder="equipment_monitor_001">
+                </div>
+                <div class="form-group">
+                  <label for="mqttQos">QoS</label>
+                  <select id="mqttQos" name="mqttQos">
+                    <option value="0">0 - At most once</option>
+                    <option value="1">1 - At least once</option>
+                    <option value="2">2 - Exactly once</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Modbus Fields -->
+            <div class="connection-fields" id="modbusFields" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="modbusType">Type</label>
+                  <select id="modbusType" name="modbusType">
+                    <option value="tcp">Modbus TCP</option>
+                    <option value="rtu">Modbus RTU (Serial)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="modbusIP">IP Address / Port</label>
+                  <input type="text" id="modbusIP" name="modbusIP" autocomplete="off" placeholder="192.168.1.100:502 or /dev/ttyUSB0">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="modbusUnitId">Unit ID</label>
+                  <input type="number" id="modbusUnitId" name="modbusUnitId" autocomplete="off" placeholder="1" value="1">
+                </div>
+                <div class="form-group">
+                  <label for="modbusRegister">Register Map (JSON)</label>
+                  <input type="text" id="modbusRegister" name="modbusRegister" autocomplete="off" placeholder='{"temp": 0, "humidity": 1}'>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Equipment
+            </button>
+            <button type="button" class="btn btn-danger" id="cancelEquipmentEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="userModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-user-plus"></i> <span id="userModalFormTitle">Add New User</span></h3>
+        <button class="modal-close" id="closeUserModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="userForm" autocomplete="off">
+          <input type="hidden" id="userId">
+          <div class="form-row-ux">
+            <div class="form-group-ux">
+              <label for="userName">Name</label>
+              <input type="text" id="userName" name="userName" autocomplete="name" required placeholder="Enter name">
+            </div>
+            <div class="form-group-ux">
+              <label for="userUsername">Username</label>
+              <input type="text" id="userUsername" name="userUsername" autocomplete="username" required placeholder="Enter username">
+            </div>
+          </div>
+          <div class="form-row-ux">
+            <div class="form-group-ux">
+              <label for="userPassword">Password <span class="required-indicator">*</span></label>
+              <input type="password" id="userPassword" name="userPassword" autocomplete="new-password" placeholder="Enter password" required>
+            </div>
+            <div class="form-group-ux">
+              <label for="branch">Branch</label>
+              <select id="branch" class="form-control">
+                <option value="">Pilih Cabang</option>
+              </select>
+            </div>
+            <div class="form-group-ux">
+              <label for="userRole">Role</label>
+              <select id="userRole" name="userRole" required>
+                <option value="user_cabang">User</option>
+                <option value="teknisi_cabang">Teknisi</option>
+                <option value="user_pusat">User Pusat</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions-ux">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save User
+            </button>
+            <button type="button" class="btn btn-danger" id="cancelUserEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div class="modal-overlay hidden" id="userDetailModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-user"></i> User Details</h3>
+        <button class="modal-close" id="closeUserDetailModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="userDetailContent">
+        <!-- Content will be populated by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+<!-- Airport Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="airportModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-plane"></i> <span id="airportModalFormTitle">Add New Airport</span></h3>
+        <button class="modal-close" id="closeAirportModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="airportForm" autocomplete="off">
+          <input type="hidden" id="airportId">
+          <div class="form-row-ux">
+            <div class="form-group-ux">
+              <label for="airportName">Airport Name</label>
+              <input type="text" id="airportName" name="airportName" autocomplete="off" required placeholder="e.g., Sentani">
+            </div>
+            <div class="form-group-ux">
+              <label for="airportCity">City</label>
+              <input type="text" id="airportCity" name="airportCity" autocomplete="off" required placeholder="e.g., Jayapura">
+            </div>
+          </div>
+          <div class="form-row-ux">
+            <div class="form-group-ux">
+              <label for="airportLat">Latitude</label>
+              <input type="number" step="0.0001" id="airportLat" name="airportLat" autocomplete="off" required placeholder="e.g., -2.5768">
+            </div>
+            <div class="form-group-ux">
+              <label for="airportLng">Longitude</label>
+              <input type="number" step="0.0001" id="airportLng" name="airportLng" autocomplete="off" required placeholder="e.g., 140.5164">
+            </div>
+          </div>
+          <div class="form-group-ux">
+            <label for="airportIpBranch">IP Gateway</label>
+            <input type="text" id="airportIpBranch" name="airportIpBranch" autocomplete="off" placeholder="e.g., 192.168.1.1">
+          </div>
+          <div class="form-row-ux">
+            <div class="form-group-ux">
+              <label for="airportParent">Airport Cabang</label>
+              <select id="airportParent" name="airportParent">
+                <option value="">None (Main Airport)</option>
+              </select>
+              <!-- <small style="color: var(--text-muted); font-size: 0.8rem;">Select parent airport to create hierarchical structure</small> -->
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Airport
+            </button>
+            <button type="button" class="btn btn-danger" id="cancelAirportEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNMP Data Modal -->
+  <div class="modal-overlay hidden" id="snmpDataModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-network-wired"></i>Data</h3>
+        <button class="modal-close" id="closeSnmpDataModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="snmpDataContent">
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipment Detail Modal -->
+  <div class="modal-overlay hidden" id="equipmentDetailModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-info-circle"></i> <span id="equipmentDetailTitle">Equipment Details</span></h3>
+        <button class="modal-close" id="closeEquipmentDetailModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="equipmentDetailContent">
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SNMP Template Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="snmpTemplateModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-network-wired"></i> <span id="snmpTemplateModalFormTitle">Add SNMP Template</span></h3>
+        <button class="modal-close" id="closeSnmpTemplateModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="snmpTemplateForm" autocomplete="off">
+          <input type="hidden" id="snmpTemplateId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="snmpTemplateName">Template Name</label>
+              <input type="text" id="snmpTemplateName" name="snmpTemplateName" autocomplete="off" required placeholder="e.g., Temperature Sensor">
+            </div>
+            <div class="form-group">
+              <label for="snmpTemplateCategory">Category</label>
+              <select id="snmpTemplateCategory" name="snmpTemplateCategory">
+                <option value="">Select Category</option>
+                <option value="Communication">Communication</option>
+                <option value="Navigation">Navigation</option>
+                <option value="Surveillance">Surveillance</option>
+                <option value="Data Processing">Data Processing</option>
+                <option value="Support">Support</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="snmpTemplateDescription">Description</label>
+            <textarea id="snmpTemplateDescription" name="snmpTemplateDescription" rows="2" autocomplete="off" placeholder="Enter description"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="snmpTemplateProtocol">Protocol Type</label>
+              <select id="snmpTemplateProtocol" name="snmpTemplateProtocol" required>
+                <option value="snmp">SNMP</option>
+                <option value="asterix">ASTERIX (RADAR)</option>
+                <option value="mqtt">MQTT</option>
+                <option value="modbus">Modbus</option>
+                <option value="json">JSON/API</option>
+                <option value="tcp">TCP Raw</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="snmpTemplateOidBase">OID Base / Config</label>
+              <input type="text" id="snmpTemplateOidBase" name="snmpTemplateOidBase" autocomplete="off" placeholder="e.g., 1.3.6.1.4.1.50000">
+            </div>
+          </div>
+          
+          <!-- Field Mappings (Dynamic based on protocol) -->
+          <div class="form-group">
+            <span class="form-label">Field Mappings</span>
+            <div id="oidMappingsContainer" style="margin-top: 10px;">
+              <!-- Field mapping rows will be added here -->
+            </div>
+            <button type="button" class="btn btn-secondary" id="addOidMappingBtn" style="margin-top: 10px;">
+              <i class="fas fa-plus"></i> Add Field Mapping
+            </button>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Template
+            </button>
+            <button type="button" class="btn btn-danger" id="cancelSnmpTemplateEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipment Template Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="templateModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-cogs"></i> <span id="templateModalFormTitle">Add Equipment Template</span></h3>
+        <button class="modal-close" id="closeTemplateModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="templateForm" autocomplete="off">
+          <input type="hidden" id="templateId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="templateName">Template Name</label>
+              <input type="text" id="templateName" name="templateName" autocomplete="off" required placeholder="e.g., Temperature Sensor">
+            </div>
+            <div class="form-group">
+              <label for="templateEquipmentType">Category</label>
+              <select id="templateEquipmentType" name="templateEquipmentType">
+                <option value="">Select Category</option>
+                <option value="Communication">Communication</option>
+                <option value="Navigation">Navigation</option>
+                <option value="Surveillance">Surveillance</option>
+                <option value="Data Processing">Data Processing</option>
+                <option value="Support">Support</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="templateBrand">Brand</label>
+              <input type="text" id="templateBrand" name="templateBrand" autocomplete="off" placeholder="e.g., Moxa">
+            </div>
+            <div class="form-group">
+              <label for="templateModel">Model</label>
+              <input type="text" id="templateModel" name="templateModel" autocomplete="off" placeholder="e.g., ioThinx 4150">
+            </div>
+            <div class="form-group">
+              <label for="templateProtocol">Protocol</label>
+              <select id="templateProtocol" name="templateProtocol" required>
+                <option value="snmp">SNMP</option>
+                <option value="modbus">Modbus</option>
+                <option value="json">JSON/API</option>
+                <option value="tcp">TCP Raw</option>
+                <option value="mqtt">MQTT</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="templateDescription">Description</label>
+            <textarea id="templateDescription" name="templateDescription" rows="2" autocomplete="off" placeholder="Enter description"></textarea>
+          </div>
+
+          <!-- Parameters Section -->
+          <div class="form-group">
+            <div class="form-header">
+              <span class="form-label">Parameters & Thresholds</span>
+              <button type="button" class="btn btn-secondary" id="addParameterBtn">
+                <i class="fas fa-plus"></i> Add Parameter
+              </button>
+            </div>
+            <div id="parameterContainer" style="margin-top: 10px;">
+              <!-- Parameter rows will be added here -->
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Template
+            </button>
+            <button type="button" class="btn btn-danger" id="cancelTemplateEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipment Template Detail Modal -->
+  <div class="modal-overlay hidden" id="templateDetailModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-cogs"></i> Template Details</h3>
+        <button class="modal-close" id="closeTemplateDetailModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="templateDetailContent">
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Surveillance Station Modal (Add/Edit) -->
+  <div class="modal-overlay hidden" id="surveillanceStationModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-radar"></i> <span id="surveillanceFormTitle">Add Surveillance Station</span></h3>
+        <button class="modal-close" id="closeSurveillanceStationModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="surveillanceStationForm" autocomplete="off">
+          <input type="hidden" id="surveillanceStationId">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="surveillanceStationName">Station Name</label>
+              <input type="text" id="surveillanceStationName" name="surveillanceStationName" autocomplete="off" required placeholder="e.g., Sentani Radar">
+            </div>
+            <div class="form-group">
+              <label for="surveillanceStationType">Type</label>
+              <select id="surveillanceStationType" name="surveillanceStationType" required>
+                <option value="radar">RADAR (ASTERIX)</option>
+                <option value="adsb">ADS-B</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="surveillanceStationIP">IP Address</label>
+              <input type="text" id="surveillanceStationIP" name="surveillanceStationIP" autocomplete="off" required placeholder="e.g., 225.30.210.1">
+            </div>
+            <div class="form-group">
+              <label for="surveillanceStationPort">Port</label>
+              <input type="number" id="surveillanceStationPort" name="surveillanceStationPort" autocomplete="off" required placeholder="e.g., 4001">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="surveillanceStationMulticast">Multicast IP (Optional)</label>
+              <input type="text" id="surveillanceStationMulticast" name="surveillanceStationMulticast" autocomplete="off" placeholder="e.g., 225.30.210.1">
+            </div>
+            <div class="form-group">
+              <label for="surveillanceStationAirport">Airport (Optional)</label>
+              <select id="surveillanceStationAirport" name="surveillanceStationAirport">
+                <option value="">Select Airport</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="surveillanceStationLat">Latitude</label>
+              <input type="number" step="0.0001" id="surveillanceStationLat" name="surveillanceStationLat" autocomplete="off" placeholder="e.g., -2.599">
+            </div>
+            <div class="form-group">
+              <label for="surveillanceStationLng">Longitude</label>
+              <input type="number" step="0.0001" id="surveillanceStationLng" name="surveillanceStationLng" autocomplete="off" placeholder="e.g., 140.528">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="surveillanceStationActive">Status</label>
+            <div class="toggle-switch-container">
+              <label class="switch">
+                <input type="checkbox" id="surveillanceStationActive" name="surveillanceStationActive" checked>
+                <span class="slider round"></span>
+              </label>
+              <span class="toggle-label">Active</span>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Station
+            </button>
+            <button type="button" class="btn btn-danger" id="cancelSurveillanceStationEdit">
+              <i class="fas fa-times"></i> Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Surveillance Detail Modal -->
+  <div class="modal-overlay hidden" id="surveillanceDetailModal">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-radar"></i> Station Details</h3>
+        <button class="modal-close" id="closeSurveillanceDetailModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="surveillanceDetailContent">
+        <!-- Content populated by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <img src="icon.png" alt="Logo" class="sidebar-logo">
+          <div class="logo-text-container">
+            <span class="logo-text-main">AirNav Indonesia</span>
+            <span class="logo-text-sub">Technical Operation Center</span>
+          </div>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-section="dashboard">
+          <i class="fas fa-map-marked-alt"></i>
+          <span>Map Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-section="cabang">
+          <i class="fas fa-building"></i>
+          <span>Cabang</span>
+        </a>
+        <a href="#" class="nav-item" data-section="equipment">
+          <i class="fas fa-tools"></i>
+          <span>Equipment</span>
+        </a>
+        <a href="#" class="nav-item" data-section="airports">
+          <i class="fas fa-plane"></i>
+          <span>Airports</span>
+        </a>
+        
+        <!-- Surveillance - RADAR & ADS-B -->
+        <!-- <a href="#" class="nav-item" data-section="surveillance" id="surveillanceNavItem">
+          <i class="fas fa-radar"></i>
+          <span>Surveillance</span>
+        </a> -->
+        
+        
+        <a href="#" class="nav-item" data-section="equipment-logs" id="equipmentLogsNavItem">
+          <i class="fas fa-history"></i>
+          <span>Equipment Logs</span>
+        </a>
+        <a href="#" class="nav-item" data-section="users" id="usersNavItem">
+          <i class="fas fa-users"></i>
+          <span>User Management</span>
+        </a>
+        <!-- Equipment Templates - Data Parsing Templates -->
+        <a href="#" class="nav-item" data-section="equipment-templates" id="equipmentTemplatesNavItem">
+          <i class="fas fa-cogs"></i>
+          <span>Equipment Templates</span>
+        </a>
+        <!-- Configuration - SNMP Tools, Network Monitor, Threshold Settings available in Configuration section -->
+        <a href="#" class="nav-item" data-section="network-tools" id="networkToolsNavItem">
+          <i class="fas fa-network-wired"></i>
+          <span>Network Tools</span>
+        </a>
+        <a href="#" class="nav-item" data-section="network-monitor" id="networkMonitorNavItem">
+          <i class="fas fa-chart-line"></i>
+          <span>Network Monitor</span>
+        </a>
+        <!-- Threshold Settings moved to Equipment Templates -->
+        <!-- <a href="#" class="nav-item" data-section="threshold-settings" id="thresholdSettingsNavItem">
+          <i class="fas fa-sliders-h"></i>
+          <span>Threshold Settings</span>
+        </a> -->
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user-panel" id="sidebarUserPanel">
+          <i class="fas fa-user-circle"></i>
+          <span id="sidebarUserName">User</span>
+        </div>
+        <button class="sidebar-logout-btn" id="sidebarLogoutBtn">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </button>
+        <button id="themeToggle" class="theme-toggle">
+          <i class="fas fa-moon"></i>
+          <span>Dark Mode</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <button class="menu-toggle" id="menuToggle">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="header-title-container">
+          <div class="header-breadcrumb" id="headerBreadcrumb">
+            <span class="breadcrumb-icon"><i class="fas fa-map-marked-alt"></i></span>
+            <span class="breadcrumb-text">Map Dashboard</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <!-- User panel moved to sidebar -->
+        </div>
+      </header>
+
+      <!-- Dashboard Section (Map) -->
+      <section class="content-section" id="dashboardSection">
+        <div class="map-stats-container">
+          <!-- Stats Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon"><i class="fas fa-tools"></i></div>
+              <div class="stat-info">
+                <h3>Total</h3>
+                <p class="stat-number" id="totalEquipment">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon available"><i class="fas fa-check-circle"></i></div>
+              <div class="stat-info">
+                <h3>Normal</h3>
+                <p class="stat-number" id="normalEquipment">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon in-use"><i class="fas fa-exclamation-triangle"></i></div>
+              <div class="stat-info">
+                <h3>Warning</h3>
+                <p class="stat-number" id="warningEquipment">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon maintenance"><i class="fas fa-times-circle"></i></div>
+              <div class="stat-info">
+                <h3>Alert</h3>
+                <p class="stat-number" id="alertEquipment">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon disconnect"><i class="fas fa-unlink"></i></div>
+              <div class="stat-info">
+                <h3>Disconnect</h3>
+                <p class="stat-number" id="disconnectEquipment">0</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Map Card -->
+          <div class="card map-card">
+            <div class="card-body">
+              <div id="mapContainer" class="map-container"></div>
+              <div class="map-legend">
+                <span class="legend-item"><span class="legend-dot normal"></span> Normal</span>
+                <span class="legend-item"><span class="legend-dot warning"></span> Warning</span>
+                <span class="legend-item"><span class="legend-dot alert"></span> Alert</span>
+                <span class="legend-item"><span class="legend-dot disconnect"></span> Disconnect</span>
+              </div>
+            </div>
+            <!-- <div class="card-header"> -->
+              <!-- <h2><i class="fas fa-map-marked-alt"></i> Equipment Map</h2> -->
+            <!-- </div> -->
+          </div>
+        </div>
+
+        <!-- Category Stats -->
+        <div class="">
+          <!-- <div class="card-header">
+            <h2><i class="fas fa-chart-pie"></i> Equipment by Category</h2>
+          </div> -->
+          <!-- <div class="card-body"> -->
+            <div class="category-stats">
+              <div class="category-item">
+                <div class="category-icon" style="background: #3b82f6;"><i class="fas fa-tower-broadcast"></i></div>
+                <div class="category-info">
+                  <h4>Communication</h4>
+                  <p id="commCount">0</p>
+                </div>
+              </div>
+              <div class="category-item">
+                <div class="category-icon" style="background: #10b981;"><i class="fas fa-compass"></i></div>
+                <div class="category-info">
+                  <h4>Navigation</h4>
+                  <p id="navCount">0</p>
+                </div>
+              </div>
+              <div class="category-item">
+                <div class="category-icon" style="background: #f59e0b;"><i class="fas fa-satellite-dish"></i></div>
+                <div class="category-info">
+                  <h4>Surveillance</h4>
+                  <p id="survCount">0</p>
+                </div>
+              </div>
+              <div class="category-item">
+                <div class="category-icon" style="background: #8b5cf6;"><i class="fas fa-server"></i></div>
+                <div class="category-info">
+                  <h4>Data Processing</h4>
+                  <p id="dataCount">0</p>
+                </div>
+              </div>
+              <div class="category-item">
+                <div class="category-icon" style="background: #ef4444;"><i class="fas fa-bolt"></i></div>
+                <div class="category-info">
+                  <h4>Support</h4>
+                  <p id="supportCount">0</p>
+                </div>
+              </div>
+            </div>
+          <!-- </div> -->
+        </div>
+      </section>
+
+      <!-- Cabang Section -->
+      <section class="content-section hidden" id="cabangSection">
+        <div class="crud-container">
+          <div class="card" style="margin-top: 0;">
+            <div class="card-header">
+              <div class="header-actions" style="display: flex; gap: 15px; width: 100%; align-items: center;">
+                <div class="search-box" style="flex: 1;">
+                  <label for="searchCabang" class="visually-hidden">Search equipment</label>
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="searchCabang" placeholder="Search branch equipment..." aria-label="Search equipment">
+                </div>
+                <div class="header-filters" style="display: flex; gap: 10px;">
+                  <select id="filterCabangAirport" class="filter-select" style="min-width: 180px;">
+                    <option value="">All Airports</option>
+                  </select>
+                  <select id="filterCabangCategory" class="filter-select">
+                    <option value="">All Categories</option>
+                    <option value="Communication">Communication</option>
+                    <option value="Navigation">Navigation</option>
+                    <option value="Surveillance">Surveillance</option>
+                    <option value="Data Processing">Data Processing</option>
+                    <option value="Support">Support</option>
+                  </select>
+                  <select id="filterCabangStatus" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Warning">Warning</option>
+                    <option value="Alert">Alert</option>
+                    <option value="Disconnect">Disconnect</option>
+                  </select>
+                  <button class="btn btn-secondary" id="refreshCabangBtn" title="Refresh Data">
+                    <i class="fas fa-sync-alt"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="cabangGrid" class="cabang-grid-container">
+                <div class="empty-state">
+                  <i class="fas fa-spinner fa-spin"></i> Loading equipment data...
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Equipment Section -->
+      <section class="content-section hidden" id="equipmentSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <!-- <h2><i class="fas fa-tools"></i> Equipment Management</h2> -->
+              <div class="header-actions">
+                <div class="search-box">
+                  <label for="searchEquipment" class="visually-hidden">Search equipment</label>
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="searchEquipment" placeholder="Search equipment..." aria-label="Search equipment">
+                </div>
+                <select id="filterCategory" class="filter-select">
+                  <option value="">All Categories</option>
+                  <option value="Communication">Communication</option>
+                  <option value="Navigation">Navigation</option>
+                  <option value="Surveillance">Surveillance</option>
+                  <option value="Data Processing">Data Processing</option>
+                  <option value="Support">Support</option>
+                </select>
+                <select id="filterAirport" class="filter-select">
+                  <option value="">All Airports</option>
+                </select>
+                <button class="btn btn-primary" id="addEquipmentBtn">
+                  <i class="fas fa-plus"></i> Add Equipment
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="text-align: center;">Status Alat</th>
+                      <th style="text-align: center;">Name</th>
+                      <th style="text-align: center;">Category</th>
+                      <th style="text-align: center;">Airport</th>
+                      <th style="text-align: center;">Status</th>
+                      <th style="text-align: center;">Connection</th>
+                      <th style="text-align: center;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="equipmentTableBody">
+                    <tr>
+                      <td colspan="7" class="empty-state">Loading equipment...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Airports Section -->
+      <section class="content-section hidden" id="airportsSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-plane"></i> Airports</h2>
+              <div class="header-actions">
+                <div class="search-box">
+                  <label for="searchAirports" class="visually-hidden">Search airports</label>
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="searchAirports" placeholder="Search airports..." aria-label="Search airports">
+                </div>
+                <button class="btn btn-primary" id="addAirportBtn">
+                  <i class="fas fa-plus"></i> Add Airport
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Location</th>
+                      <th>IP Gateway</th>
+                      <th>Total Equipment</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="airportsTableBody">
+                    <tr>
+                      <td colspan="4" class="empty-state">Loading airports...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Surveillance Section - RADAR & ADS-B -->
+      <section class="content-section hidden" id="surveillanceSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-radar"></i> Surveillance - RADAR & ADS-B</h2>
+              <div class="header-actions">
+                <select id="filterSurveillanceType" class="filter-select">
+                  <option value="all">All Types</option>
+                  <option value="radar">RADAR</option>
+                  <option value="adsb">ADS-B</option>
+                </select>
+                <button class="btn btn-secondary" id="refreshSurveillanceBtn">
+                  <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button class="btn btn-primary" id="addSurveillanceStationBtn" style="display: none;">
+                  <i class="fas fa-plus"></i> Add Station
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name / Airport</th>
+                      <th>Type</th>
+                      <th>IP:Port</th>
+                      <th>Coordinates</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="surveillanceTableBody">
+                    <tr>
+                      <td colspan="7" class="empty-state">Loading surveillance stations...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Configuration Section - Two Panel Layout -->
+      <section class="content-section hidden" id="configurationSection">
+        <div class="crud-container">
+          <div id="configurationMonitoringSection">
+            <div class="card" style="margin-top: 0;">
+              <div class="card-body" style="padding-top: 15px;">
+                <div class="monitoring-layout">
+                  <!-- Configuration Submenu Sidebar -->
+                  <div class="config-nav-sidebar">
+                    <div class="config-nav-list">
+                      <!-- Equipment Templates moved to main sidebar -->
+                      <!-- <div class="config-nav-item active" data-config="snmp-templates">
+                        <i class="fas fa-network-wired"></i>
+                        <span>Data Parsing Templates</span>
+                      </div> -->
+                      <div class="config-nav-item active" data-config="snmp-tools">
+                        <i class="fas fa-wrench"></i>
+                        <span>SNMP Tools</span>
+                      </div>
+                      <div class="config-nav-item" data-config="network-monitor">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Network Monitor</span>
+                      </div>
+                      <!-- Threshold Settings moved to Equipment Templates -->
+                      <!-- <div class="config-nav-item" data-config="threshold-settings">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>Threshold Settings</span>
+                      </div> -->
+                    </div>
+                  </div>
+
+                  <!-- Configuration Content Display -->
+                  <div class="config-content-display">
+                    <!-- Data Parsing Templates Content -->
+                    <div id="configSnmpTemplatesContent" class="config-content-item hidden">
+                      <div class="card">
+                        <div class="card-header">
+                          <h2><i class="fas fa-network-wired"></i> Data Parsing Templates</h2>
+                          <button class="btn btn-primary" id="addSnmpTemplateBtn2">
+                            <i class="fas fa-plus"></i> Add Template
+                          </button>
+                        </div>
+                        <div class="card-body">
+                          <div class="table-responsive">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Description</th>
+                                  <th>OID Base</th>
+                                  <th>Category</th>
+                                  <th>Type</th>
+                                  <th>Mappings</th>
+                                  <th>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody id="snmpTemplateTableBody2">
+                                <tr>
+                                  <td colspan="7" class="empty-state">Loading templates...</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- SNMP Tools Content -->
+                    <div id="configSnmpToolsContent" class="config-content-item hidden">
+                      <div class="card">
+                        <div class="card-header">
+                          <h2><i class="fas fa-wrench"></i> SNMP Tools</h2>
+                        </div>
+                        <div class="card-body">
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label for="snmpToolIP2">Device IP Address</label>
+                              <input type="text" id="snmpToolIP2" placeholder="e.g., 10.18.141.202">
+                            </div>
+                            <div class="form-group">
+                              <label for="snmpToolPort2">Port</label>
+                              <input type="number" id="snmpToolPort2" placeholder="161" value="161">
+                            </div>
+                          </div>
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label for="snmpToolCommunity2">Community String</label>
+                              <input type="text" id="snmpToolCommunity2" placeholder="public" value="public">
+                            </div>
+                            <div class="form-group">
+                              <label for="snmpToolOID2">OID</label>
+                              <input type="text" id="snmpToolOID2" placeholder="e.g., 1.3.6.1.2.1.1.1.0">
+                            </div>
+                          </div>
+                          <div class="form-actions">
+                            <button class="btn btn-primary" onclick="testSnmpConnection2()">
+                              <i class="fas fa-plug"></i> Test Connection
+                            </button>
+                            <button class="btn btn-secondary" onclick="walkSnmpTree2()">
+                              <i class="fas fa-sitemap"></i> Walk OID Tree
+                            </button>
+                            <button class="btn btn-secondary" onclick="getSnmpBulk2()">
+                              <i class="fas fa-list"></i> Bulk Get
+                            </button>
+                          </div>
+                          <div id="snmpToolResult2" style="margin-top: 20px;">
+                            <div class="empty-state">Test SNMP connection to see results</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Ping Tool Section -->
+                      <div class="card" style="margin-top: 20px;">
+                        <div class="card-header">
+                          <h2><i class="fas fa-network-wired"></i> Ping Tool</h2>
+                        </div>
+                        <div class="card-body">
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label for="pingToolIP">IP Address</label>
+                              <input type="text" id="pingToolIP" placeholder="e.g., 172.20.58.207">
+                            </div>
+                            <div class="form-group">
+                              <label for="pingToolInterval">Interval (detik)</label>
+                              <input type="number" id="pingToolInterval" placeholder="5" value="5" min="1" max="60">
+                            </div>
+                          </div>
+                          <div class="form-actions">
+                            <button class="btn btn-primary" onclick="startPing()">
+                              <i class="fas fa-play"></i> Start
+                            </button>
+                            <button class="btn btn-danger" onclick="stopPing()">
+                              <i class="fas fa-stop"></i> Stop
+                            </button>
+                          </div>
+                          <div id="pingToolResult" style="margin-top: 20px;">
+                            <div class="empty-state">Masukkan IP dan interval, lalu klik Start untuk memulai ping</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Threshold Settings Content -->
+                    <div id="configThresholdSettingsContent" class="config-content-item hidden">
+                      <div class="card">
+                        <div class="card-header">
+                          <h2><i class="fas fa-sliders-h"></i> Threshold Settings</h2>
+                          <div class="header-actions">
+                            <select id="thresholdEquipmentSelect2" class="filter-select">
+                              <option value="">Select Equipment</option>
+                            </select>
+                            <button class="btn btn-primary" id="addThresholdBtn2">
+                              <i class="fas fa-plus"></i> Add Threshold
+                            </button>
+                          </div>
+                        </div>
+                        <div class="card-body">
+                          <div class="table-responsive">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Equipment</th>
+                                  <th>Parameter</th>
+                                  <th>Warning Low</th>
+                                  <th>Warning High</th>
+                                  <th>Critical Low</th>
+                                  <th>Critical High</th>
+                                  <th>Status</th>
+                                  <th>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody id="thresholdTableBody2">
+                                <tr>
+                                  <td colspan="8" class="empty-state">Select an equipment to configure thresholds</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Threshold Info Card -->
+                      <div class="card" style="margin-top: 20px;">
+                        <div class="card-header">
+                          <h2><i class="fas fa-info-circle"></i> Threshold Guide</h2>
+                        </div>
+                        <div class="card-body">
+                          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #10b981;">
+                              <h4 style="color: #10b981; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Normal</h4>
+                              <p style="color: var(--text-secondary); font-size: 0.9rem;">Value is within acceptable range (below Warning threshold)</p>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                              <h4 style="color: #f59e0b; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Warning</h4>
+                              <p style="color: var(--text-secondary); font-size: 0.9rem;">Value exceeds warning threshold - needs attention</p>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                              <h4 style="color: #ef4444; margin-bottom: 10px;"><i class="fas fa-times-circle"></i> Alert</h4>
+                              <p style="color: var(--text-secondary); font-size: 0.9rem;">Value exceeds critical threshold - immediate action required</p>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #6b7280;">
+                              <h4 style="color: #6b7280; margin-bottom: 10px;"><i class="fas fa-unlink"></i> Disconnect</h4>
+                              <p style="color: var(--text-secondary); font-size: 0.9rem;">Device unreachable or connection failed</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Equipment Templates Section -->
+      <section class="content-section hidden" id="equipment-templatesSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-cogs"></i> Equipment Templates</h2>
+              <div class="header-actions">
+                <button class="btn btn-primary" id="addTemplateBtn">
+                  <i class="fas fa-plus"></i> Add Template
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Category</th>
+                      <th>Brand</th>
+                      <th>Model</th>
+                      <th>Type</th>
+                      <th>Description</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="templateTableBody">
+                    <tr>
+                      <td colspan="7" class="empty-state">Loading templates...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-section hidden" id="configurationSectionAlt">
+        <div class="crud-container">
+          <div id="configurationMonitoringSectionAlt">
+            <div class="card" style="margin-top: 0;">
+              <div class="card-body" style="padding-top: 15px;">
+                <div class="monitoring-layout">
+                  <!-- Configuration Submenu Sidebar -->
+                  <div class="config-nav-sidebar">
+                    <div class="config-nav-list">
+                      <!-- Equipment Templates moved to main sidebar -->
+                      <!-- <div class="config-nav-item active" data-config="snmp-templates">
+                        <i class="fas fa-network-wired"></i>
+                        <span>Data Parsing Templates</span>
+                      </div> -->
+                      <div class="config-nav-item active" data-config="snmp-tools">
+                        <i class="fas fa-wrench"></i>
+                        <span>SNMP Tools</span>
+                      </div>
+                      <div class="config-nav-item" data-config="network-monitor">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Network Monitor</span>
+                      </div>
+                      <!-- Threshold Settings moved to Equipment Templates -->
+                      <!-- <div class="config-nav-item" data-config="threshold-settings">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>Threshold Settings</span>
+                      </div> -->
+                    </div>
+                  </div>
+
+                  <!-- Configuration Content Display -->
+                  <div class="config-content-display">
+                    <!-- Data Parsing Templates Content -->
+                    <div id="configSnmpTemplatesContentAlt" class="config-content-item hidden">
+                      <div class="card">
+                        <div class="card-header">
+                          <h2><i class="fas fa-network-wired"></i> Data Parsing Templates</h2>
+                          <button class="btn btn-primary" id="addSnmpTemplateBtn2Alt">
+                            <i class="fas fa-plus"></i> Add Template
+                          </button>
+                        </div>
+                        <div class="card-body">
+                          <div class="table-responsive">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Description</th>
+                                  <th>OID Base</th>
+                                  <th>Category</th>
+                                  <th>Type</th>
+                                  <th>Mappings</th>
+                                  <th>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody id="snmpTemplateTableBody2Alt">
+                                <tr><td colspan="7" class="empty-state">Loading templates...</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- SNMP Tools Content -->
+                    <div id="configSnmpToolsContentAlt" class="config-content-item hidden">
+                      <div class="card">
+                        <div class="card-header">
+                          <h2><i class="fas fa-wrench"></i> SNMP Tools</h2>
+                        </div>
+                        <div class="card-body">
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label for="snmpToolIP2Alt">Device IP Address</label>
+                              <input type="text" id="snmpToolIP2Alt" placeholder="e.g., 10.18.141.202">
+                            </div>
+                            <div class="form-group">
+                              <label for="snmpToolPort2Alt">Port</label>
+                              <input type="number" id="snmpToolPort2Alt" placeholder="161" value="161">
+                            </div>
+                          </div>
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label for="snmpToolCommunity2Alt">Community String</label>
+                              <input type="text" id="snmpToolCommunity2Alt" placeholder="public" value="public">
+                            </div>
+                            <div class="form-group">
+                              <label for="snmpToolOID2Alt">OID</label>
+                              <input type="text" id="snmpToolOID2Alt" placeholder="e.g., 1.3.6.1.2.1.1.1.0">
+                            </div>
+                          </div>
+                          <div class="form-actions">
+                            <button class="btn btn-primary" onclick="testSnmpConnection2Alt()">
+                              <i class="fas fa-plug"></i> Test Connection
+                            </button>
+                            <button class="btn btn-secondary" onclick="walkSnmpTree2Alt()">
+                              <i class="fas fa-sitemap"></i> Walk OID Tree
+                            </button>
+                          </div>
+                          <div id="snmpToolResult2Alt" style="margin-top: 20px;">
+                            <div class="empty-state">Test SNMP connection to see results</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Threshold Settings Content -->
+                    <div id="configThresholdSettingsContentAlt" class="config-content-item hidden">
+                      <div class="card">
+                        <div class="card-header">
+                          <h2><i class="fas fa-sliders-h"></i> Threshold Settings</h2>
+                          <div class="header-actions">
+                            <select id="thresholdEquipmentSelect2Alt" class="filter-select">
+                              <option value="">Select Equipment</option>
+                            </select>
+                            <button class="btn btn-primary" id="addThresholdBtn2Alt">
+                              <i class="fas fa-plus"></i> Add Threshold
+                            </button>
+                          </div>
+                        </div>
+                        <div class="card-body">
+                          <div class="table-responsive">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Equipment</th>
+                                  <th>Parameter</th>
+                                  <th>Warning Low</th>
+                                  <th>Warning High</th>
+                                  <th>Critical Low</th>
+                                  <th>Critical High</th>
+                                  <th>Status</th>
+                                  <th>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody id="thresholdTableBody2Alt">
+                                <tr><td colspan="8" class="empty-state">Select an equipment to configure thresholds</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-section hidden" id="snmp-templatesSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-network-wired"></i> Data Parsing Templates</h2>
+              <button class="btn btn-primary" id="addSnmpTemplateBtn">
+                <i class="fas fa-plus"></i> Add Template
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Description</th>
+                      <th>OID Base</th>
+                      <th>Category</th>
+                      <th>Type</th>
+                      <th>Mappings</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="snmpTemplateTableBody">
+                    <tr>
+                      <td colspan="7" class="empty-state">Loading templates...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SNMP Tools Section (Removed to reduce clutter - functionality available in Configuration > SNMP Tools) -->
+
+      <!-- Threshold Settings Section -->
+      <section class="content-section hidden" id="threshold-settingsSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-sliders-h"></i> Threshold Settings</h2>
+              <div class="header-actions">
+                <select id="thresholdEquipmentSelect" class="filter-select">
+                  <option value="">Select Equipment</option>
+                </select>
+                <button class="btn btn-primary" id="addThresholdBtn">
+                  <i class="fas fa-plus"></i> Add Threshold
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Equipment</th>
+                      <th>Parameter</th>
+                      <th>Warning Low</th>
+                      <th>Warning High</th>
+                      <th>Critical Low</th>
+                      <th>Critical High</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="thresholdTableBody">
+                    <tr>
+                      <td colspan="8" class="empty-state">Select an equipment to configure thresholds</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Threshold Info Card -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h2><i class="fas fa-info-circle"></i> Threshold Guide</h2>
+            </div>
+            <div class="card-body">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #10b981;">
+                  <h4 style="color: #10b981; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Normal</h4>
+                  <p style="color: var(--text-secondary); font-size: 0.9rem;">Value is within acceptable range (below Warning threshold)</p>
+                </div>
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                  <h4 style="color: #f59e0b; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Warning</h4>
+                  <p style="color: var(--text-secondary); font-size: 0.9rem;">Value exceeds warning threshold - needs attention</p>
+                </div>
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                  <h4 style="color: #ef4444; margin-bottom: 10px;"><i class="fas fa-times-circle"></i> Alert</h4>
+                  <p style="color: var(--text-secondary); font-size: 0.9rem;">Value exceeds critical threshold - immediate action required</p>
+                </div>
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; border-left: 4px solid #6b7280;">
+                  <h4 style="color: #6b7280; margin-bottom: 10px;"><i class="fas fa-unlink"></i> Disconnect</h4>
+                  <p style="color: var(--text-secondary); font-size: 0.9rem;">Device unreachable or connection failed</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Equipment Logs Section -->
+      <section class="content-section hidden" id="equipment-logsSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-history"></i> Equipment Logs</h2>
+              <div class="header-actions">
+                <select id="logsPageSize" class="filter-select" style="width: 100px;">
+                  <option value="10">10 rows</option>
+                  <option value="25">25 rows</option>
+                  <option value="50" selected>50 rows</option>
+                  <option value="100">100 rows</option>
+                </select>
+                <select id="filterLogEquipment" class="filter-select">
+                  <option value="">All Equipment</option>
+                </select>
+                <select id="filterLogSource" class="filter-select">
+                  <option value="">All Sources</option>
+                  <option value="snmp">SNMP</option>
+                  <option value="json">JSON</option>
+                  <option value="mqtt">MQTT</option>
+                  <option value="modbus">Modbus</option>
+                  <option value="manual">Manual</option>
+                </select>
+                <button class="btn btn-secondary" id="refreshLogsBtn">
+                  <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="sortable" data-sort="Waktu Update" onclick="sortLogsTable('Waktu Update')">Time <i class="fas fa-sort"></i></th>
+                      <th class="sortable" data-sort="Nama Alat" onclick="sortLogsTable('Nama Alat')">Equipment <i class="fas fa-sort"></i></th>
+                      <th class="sortable" data-sort="source" onclick="sortLogsTable('source')">Source <i class="fas fa-sort"></i></th>
+                      <th>Data</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="equipmentLogsTableBody">
+                    <tr>
+                      <td colspan="5" class="empty-state">Loading logs...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div id="logsPagination" class="pagination-container"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Users Section -->
+      <section class="content-section hidden" id="usersSection">
+        <div class="crud-container">
+          <div class="card">
+            <div class="card-header">
+              <div class="header-actions">
+                <div class="search-box">
+                  <label for="searchUsers" class="visually-hidden">Search users</label>
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="searchUsers" placeholder="Search users..." aria-label="Search users">
+                </div>
+                <select id="filterRole" class="filter-select">
+                  <option value="">All Roles</option>
+                  <option value="admin">Admin</option>
+                  <option value="user_pusat">User Pusat</option>
+                  <option value="teknisi_cabang">Teknisi</option>
+                  <option value="user_cabang">User Cabang</option>
+                </select>
+                <button class="btn btn-primary" id="addUserBtn">
+                  <i class="fas fa-plus"></i> Add User
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="sortable" data-sort="id" onclick="sortUsersTable('id')">ID <i class="fas fa-sort"></i></th>
+                      <th class="sortable" data-sort="name" onclick="sortUsersTable('name')">Name <i class="fas fa-sort"></i></th>
+                      <th class="sortable" data-sort="username" onclick="sortUsersTable('username')">Username <i class="fas fa-sort"></i></th>
+                      <th class="sortable" data-sort="role" onclick="sortUsersTable('role')">Role <i class="fas fa-sort"></i></th>
+                      <th class="sortable" data-sort="branch" onclick="sortUsersTable('branch')">Branch <i class="fas fa-sort"></i></th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userTableBody">
+                    <tr>
+                      <td colspan="5" class="empty-state">Loading users...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Network Tools Section (Wireshark-like) -->
+      <section class="content-section hidden" id="network-toolsSection">
+        <div class="crud-container">
+          <!-- Capture Controls -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h2><i class="fas fa-network-wired"></i> Network Tools - Packet Analyzer</h2>
+              <div id="captureStatus">
+                <span class="status-badge status-stopped"><i class="fas fa-circle"></i> Stopped</span>
+                <span id="captureMode" class="capture-mode" style="margin-left: 12px; font-size: 0.9rem; color: var(--text-secondary);">Mode: unknown</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="packetFilter">Filter</label>
+                  <input type="text" id="packetFilter" placeholder="Filter by IP, Protocol, or Info..." oninput="filterPackets()">
+                </div>
+                <div class="form-group">
+                  <label for="protocolFilter">Protocol</label>
+                  <select id="protocolFilter" onchange="filterPackets()">
+                    <option value="">All Protocols</option>
+                    <option value="TCP">TCP</option>
+                    <option value="UDP">UDP</option>
+                    <option value="ICMP">ICMP</option>
+                    <option value="SNMP">SNMP</option>
+                    <option value="HTTP">HTTP</option>
+                    <option value="Modbus">Modbus</option>
+                    <option value="DNS">DNS</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="interfaceSelect">Interface</label>
+                  <select id="interfaceSelect" onchange="filterPackets()">
+                    <option value="">All Interfaces</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-actions" style="align-items: center; gap: 8px;">
+                <button class="btn btn-success" id="startCaptureBtn" onclick="startCapture()">
+                  <i class="fas fa-play"></i> Start Capture
+                </button>
+                <button class="btn btn-danger" id="stopCaptureBtn" onclick="stopCapture()" disabled>
+                  <i class="fas fa-stop"></i> Stop Capture
+                </button>
+                <button class="btn btn-secondary" onclick="clearCapture()">
+                  <i class="fas fa-trash"></i> Clear
+                </button>
+                <div class="export-group" style="display: flex; align-items: center; gap: 8px;">
+                  <select id="exportFormat" title="Select export format">
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                    <option value="xml">XML</option>
+                    <option value="pcap">PCAP</option>
+                  </select>
+                  <button class="btn btn-primary" onclick="exportPackets()">
+                    <i class="fas fa-download"></i> Export
+                  </button>
+                </div>
+              </div>
+              <div style="margin-top: 10px;">
+                <span class="packet-count">Packets: <strong id="packetCount">0</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Packet List and Details -->
+          <div class="network-tools-layout">
+            <!-- Packet List -->
+            <div class="card" style="flex: 1;">
+              <div class="card-header">
+                <h3><i class="fas fa-list"></i> Captured Packets</h3>
+              </div>
+              <div class="card-body" style="padding: 0;">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                  <table class="packet-list-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 50px;">No.</th>
+                        <th style="width: 100px;">Time</th>
+                        <th style="width: 120px;">Interface</th>
+                        <th style="width: 130px;">Source</th>
+                        <th style="width: 130px;">Destination</th>
+                        <th style="width: 80px;">Protocol</th>
+                        <th style="width: 70px;">Length</th>
+                        <th>Info</th>
+                      </tr>
+                    </thead>
+                    <tbody id="packetListBody">
+                      <tr>
+                        <td colspan="8" class="empty-state">No packets captured. Click "Start Capture" to begin.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Packet Details -->
+            <div class="card" style="flex: 1;">
+              <div class="card-header">
+                <h3><i class="fas fa-info-circle"></i> Packet Details</h3>
+              </div>
+              <div class="card-body" id="packetDetailsContent" style="max-height: 400px; overflow-y: auto;">
+                <div class="empty-state">Select a packet to view details</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hex Viewer -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-code"></i> Hex Viewer</h3>
+            </div>
+            <div class="card-body" id="hexViewerContent" style="max-height: 250px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 12px;">
+              <div class="empty-state">Select a packet to view hex data</div>
+            </div>
+          </div>
+
+          <!-- Log -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-history"></i> Capture Log</h3>
+              <button class="btn btn-secondary" onclick="clearLog()" style="padding: 5px 10px; font-size: 0.8rem;">
+                <i class="fas fa-trash"></i> Clear
+              </button>
+            </div>
+            <div class="card-body" id="networkToolsLog" style="max-height: 150px; overflow-y: auto; background: var(--bg-secondary); font-family: monospace; font-size: 0.85rem;">
+              <div class="log-entry info">[System] Network Tools initialized - Ready to capture</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Network Monitoring Dashboard Section -->
+      <section class="content-section hidden" id="network-monitorSection">
+        <div class="crud-container">
+          <!-- Network Stats Overview -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h2><i class="fas fa-chart-line"></i> Network Monitoring Dashboard</h2>
+            </div>
+            <div class="card-body">
+              <button class="btn btn-primary" onclick="refreshNetworkStats()" style="margin-bottom: 15px;">
+                <i class="fas fa-sync-alt"></i> Refresh Stats
+              </button>
+              <button class="btn btn-info" onclick="testConnectivity()" style="margin-bottom: 15px;">
+                <i class="fas fa-globe"></i> Test Connectivity
+              </button>
+            </div>
+          </div>
+
+          <!-- Network Interfaces -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-network-wired"></i> Network Interfaces</h3>
+            </div>
+            <div class="card-body" id="networkInterfacesContent" style="overflow-x: auto;">
+              <div class="empty-state">Loading network interfaces...</div>
+            </div>
+          </div>
+
+          <!-- Interface Traffic Stats -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-bar-chart"></i> Interface Traffic (RX/TX)</h3>
+            </div>
+            <div class="card-body" id="trafficStatsContent" style="min-height: 300px;">
+              <canvas id="trafficChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Connectivity Test Results -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-heartbeat"></i> Connectivity Status</h3>
+            </div>
+            <div class="card-body" id="connectivityContent">
+              <div class="empty-state">Click "Test Connectivity" to check network links</div>
+            </div>
+          </div>
+
+          <!-- System Network Info -->
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fas fa-info-circle"></i> System Information</h3>
+            </div>
+            <div class="card-body" id="systemNetworkInfoContent">
+              <div class="empty-state">Loading system information...</div>
+            </div>
+          </div>
+
+          <!-- Your Network Card -->
+          <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+              <h3 style="margin: 0;"><i class="fas fa-map-marker-alt"></i> Your Network Address</h3>
+            </div>
+            <div class="card-body" id="localNetworkInfoContent">
+              <div class="empty-state">Loading your network information...</div>
+            </div>
+          </div>
+
+          <!-- Connected Devices (ARP Table) -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-sitemap"></i> Connected Devices (ARP Table)</h3>
+              <button class="btn btn-small btn-primary" id="discoverDevicesBtn" onclick="discoverNetworkDevices()" style="margin-left: 10px;">
+                <i class="fas fa-search"></i> Scan Network
+              </button>
+            </div>
+            <div class="card-body" id="connectedDevicesContent" style="overflow-x: auto;">
+              <div class="empty-state">Click "Scan Network" to discover connected devices...</div>
+            </div>
+          </div>
+
+          <!-- Discovered Active Devices -->
+          <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-network-wired"></i> Active Devices On Network</h3>
+            </div>
+            <div class="card-body" id="discoveredDevicesContent" style="overflow-x: auto;">
+              <div class="empty-state">Scan network to see active devices...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Equipment Detail Panel - Sliding Panel -->
+  <div class="detail-panel-overlay" id="detailPanelOverlay"></div>
+  <div class="equipment-detail-panel" id="equipmentDetailPanel">
+    <div class="detail-panel-header">
+      <h3><i class="fas fa-info-circle"></i> Equipment Details</h3>
+      <button class="detail-panel-close" id="closeDetailPanel">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="detail-panel-body" id="detailPanelBody">
+      <div class="detail-panel-loading">
+        <i class="fas fa-spinner"></i>
+        <p>Loading equipment details...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+  <script src="app-logs-fix.js"></script>
+  <script src="cabang-app.js"></script>
+  <script src="config-nav.js"></script>
+  <script src="snmp-tools.js"></script>
+  <script src="network-tools.js"></script>
+  <script src="network-monitoring-dashboard.js"></script>
+  <script src="surveillance-app.js"></script>
+  <script src="template-app.js"></script>
+</body>
+</html>

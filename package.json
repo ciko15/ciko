@@ -1,0 +1,38 @@
+{
+  "name": "my-fullstack-app",
+  "version": "1.0.0",
+  "description": "SNMP Airport Management System - Full-stack Bun application with ElysiaJS backend",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "/Users/vickra/.bun/bin/bun src/server.ts",
+    "dev": "/Users/vickra/.bun/bin/bun --watch src/server.ts",
+    "init-db": "/Users/vickra/.bun/bin/bun db/init.js"
+  },
+  "keywords": [
+    "bun",
+    "elysia",
+    "postgresql",
+    "snmp",
+    "airport",
+    "monitoring"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.1",
+    "@elysiajs/jwt": "^1.4.1",
+    "@elysiajs/server-timing": "^1.4.0",
+    "@elysiajs/static": "^1.4.7",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.3.1",
+    "elysia": "^1.4.28",
+    "mysql2": "^3.18.2",
+    "node-cron": "^4.2.1",
+    "pg": "^8.18.0",
+    "ping": "^1.0.0",
+    "snmp": "^0.0.3",
+    "snmp-native": "^1.2.0",
+    "socket.io": "^4.8.3",
+    "systeminformation": "^5.31.4"
+  }
+}
