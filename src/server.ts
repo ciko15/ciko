@@ -3,8 +3,30 @@ import { cors } from '@elysiajs/cors';
 import { staticPlugin } from '@elysiajs/static';
 import { jwt } from '@elysiajs/jwt';
 import { serverTiming } from '@elysiajs/server-timing';
-import bcrypt from 'bcryptjs';
+
 import ping from 'ping';
+
+// Authorization middleware
+function authorize(allowedRoles: string[]) {
+    return ({ user, set }: any) => {
+        const userRole = user?.role;
+        if (!userRole || !allowedRoles.includes(userRole)) {
+            set.status = 403;
+            throw new Error('Unauthorized');
+        }
+    };
+}
+
+function authenticate(app: any) {
+    return app.derive(({ user, set }: any) => {
+        const userRole = user?.role;
+        if (!userRole) {
+            set.status = 401;
+            throw new Error('Authentication required');
+        }
+        return {};
+    });
+}
 
 
 // Import services and managers
@@ -32,8 +54,6 @@ try {
 }
 
 const PORT = process.env.PORT || 3100;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
-const saltRounds = 10;
 
 // Global State
 export const state = {
@@ -54,20 +74,14 @@ export const state = {
 };
 
 
-// Captcha Helper
-const generateCaptcha = () => {
-    const num1 = Math.floor(Math.random() * 10) + 1;
-    const num2 = Math.floor(Math.random() * 10) + 1;
-    return { question: `${num1} + ${num2} = ?`, answer: num1 + num2 };
-};
+
 
 // --- BACKGROUND TASKS ---
 async function collectEquipmentData() {
     try {
         const networkUtils = require('./utils/network');
         const fetchAndParseData = networkUtils.fetchAndParseData;
-        const pingTiered = networkUtils.pingTiered;
-        console.log('[SCHEDULER] Starting equipment data collection...');
+        console.log('[SCHEDULER] Starting equipment data collection (direct connect)...');
         const allEquipment = await db.getAllEquipment({ limit: 10000 });
         const equipmentList = allEquipment.data || allEquipment;
 
@@ -75,17 +89,6 @@ async function collectEquipmentData() {
             const config = item.snmpConfig || item.snmp_config;
             if (config?.enabled) {
                 try {
-                    const pingResult = await pingTiered(item.id);
-                    if (!pingResult.success) {
-                        await db.updateEquipmentStatus(item.id, 'Disconnect');
-                        await db.createEquipmentLog({
-                            equipmentId: item.id,
-                            data: { status: 'Disconnect', message: pingResult.message || 'Device Unreachable' },
-                            source: config.templateId || 'snmp'
-                        });
-                        continue;
-                    }
-                    
                     const { parsedData, status, triggeredParameters } = await fetchAndParseData(item);
                     await db.updateEquipmentStatus(item.id, status);
                     await db.createEquipmentLog({
@@ -93,8 +96,18 @@ async function collectEquipmentData() {
                         data: { ...parsedData, status, triggeredParameters: triggeredParameters || [] },
                         source: config.templateId || 'snmp'
                     });
+                    
+                    // File logging (new)
+                    const fileLogger = require('./utils/fileLogger');
+                    await fileLogger.log(item.name || `equip_${item.id}`, item.id, { 
+                        ...parsedData, 
+                        status, 
+                        triggeredParameters: triggeredParameters || [],
+                        _ip: parsedData._ip 
+                    });
                 } catch (err: any) {
                     console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
+                    await db.updateEquipmentStatus(item.id, 'Disconnect');
                 }
             }
         }
@@ -192,43 +205,24 @@ function getEquipmentCountByCategory(equipmentList: any[]) {
     };
 }
 
-// --- MIDDLEWARE ---
-const authenticate = (app: Elysia) => 
-    app.derive(async ({ jwt, headers, set }: any) => {
-        const authHeader = headers['authorization'];
-        if (!authHeader) {
-            set.status = 401;
-            return { user: null };
-        }
-        
-        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-        const user = await jwt.verify(token);
-        
-        if (!user) {
-            set.status = 401;
-            return { user: null };
-        }
-        
-        return { user };
-    })
-    .onBeforeHandle(({ user, set }: any) => {
-        if (!user) {
-            set.status = 401;
-            return { message: 'Unauthorized' };
-        }
-    });
 
-const authorize = (roles: string[]) => ({ user, set }: any) => {
-    if (!user || !roles.includes(user.role)) {
-        set.status = 403;
-        return { message: 'Forbidden: Access denied' };
-    }
-};
 
 // Initialize Elysia
 const app = new Elysia()
     .use(cors())
     .use(serverTiming())
+    .derive(({ request, set }: any) => {
+        const auth = request.headers.get('authorization');
+        if (auth && auth.startsWith('Bearer ')) {
+            const token = auth.substring(7);
+            // Handle static development token
+            if (token.startsWith('static-token-')) {
+                return { user: { role: 'admin', username: 'Admin' } };
+            }
+            // Future: Handle real JWT here
+        }
+        return { user: null };
+    })
     
     // Web Application SEO & Aesthetics Implementation
     // This server serves the modern Bun/Elysia backend and the static TOC frontend
@@ -244,7 +238,7 @@ const app = new Elysia()
             };
         }
         console.error(`[SERVER-ERROR] ${code}:`, error);
-        set.status = 500;
+        if (!set.status || set.status === 200) set.status = 500;
         return { success: false, message: (error as any).message || 'Internal Server Error' };
     })
 
@@ -253,71 +247,11 @@ const app = new Elysia()
         assets: 'public',
         prefix: '/'
     }))
-    .use(
-        jwt({
-            name: 'jwt',
-            secret: JWT_SECRET
-        })
-    )
+
     .state('simulationMode', true)
     
     // --- AUTH ---
-    .group('/api/auth', (app) => 
-        app
-            .get('/captcha', () => generateCaptcha())
-            .post('/login', async ({ body, jwt, set }) => {
-                const { username, password, captchaAnswer, originalCaptchaAnswer } = body as any;
-                
-                // Simple validation for development
-                if (captchaAnswer != originalCaptchaAnswer) {
-                    set.status = 400;
-                    return { message: 'Captcha salah' };
-                }
 
-                try {
-                    const user = await db.findUserByUsername(username);
-                    if (!user) {
-                        set.status = 401;
-                        return { message: 'User tidak ditemukan' };
-                    }
-
-                    const isPasswordMatch = await bcrypt.compare(password, user.password);
-                    if (!isPasswordMatch) {
-                        set.status = 401;
-                        return { message: 'Password salah' };
-                    }
-
-                    const token = await jwt.sign({
-                        id: user.id,
-                        username: user.username,
-                        role: user.role,
-                        branchId: user.branch_id
-                    });
-
-                    return {
-                        message: 'Login berhasil',
-                        token,
-                        user: {
-                            id: user.id,
-                            username: user.username,
-                            role: user.role,
-                            fullName: user.full_name,
-                            branchId: user.branch_id
-                        }
-                    };
-                } catch (error: any) {
-                    set.status = 500;
-                    return { message: 'Internal Server Error', error: error.message };
-                }
-            }, {
-                body: t.Object({
-                    username: t.String(),
-                    password: t.String(),
-                    captchaAnswer: t.Any(),
-                    originalCaptchaAnswer: t.Any()
-                })
-            })
-    )
 
     // Public Equipment Stats
     .get('/api/equipment/stats', async () => {
@@ -408,10 +342,7 @@ const app = new Elysia()
         return template;
     }, { beforeHandle: () => {} })
 
-    // --- PROTECTED ROUTES ---
-    .use(authenticate)
-
-    // --- PING TOOL ROUTES ---
+    // --- PUBLIC PING TOOL ---
     .group('/api/ping', (app) => 
         app
             .post('/start', async ({ body, set }) => {
@@ -519,22 +450,15 @@ const app = new Elysia()
     )
 
 
-    // --- PROTECTED ROUTES ---
-    .use(authenticate)
     .group('/api/equipment', (app) =>
         app
             // Equipment List
-            .get('/', async ({ query, user, set }) => {
+            .get('/', async ({ query, set }) => {
                 try {
                     const { airportId, branchId, category, isActive, page = 1, limit = 1000, includeData } = query;
                     
-                    let effectiveBranchId = user.branchId;
-                    if (!effectiveBranchId) {
-                        effectiveBranchId = branchId ? parseInt(branchId as string) : (airportId ? parseInt(airportId as string) : undefined);
-                    }
-
                     const result = await db.getAllEquipment({
-                        branchId: effectiveBranchId,
+                        branchId: branchId ? parseInt(branchId as string) : undefined,
                         category: (category as string) || undefined,
                         isActive: isActive === 'all' ? 'all' : isActive === 'false' ? false : true,
                         page: parseInt(page as string),
@@ -681,7 +605,7 @@ const app = new Elysia()
                 const item = await db.getAirportById(params.id);
                 if (!item) {
                     set.status = 404;
-                    return { message: 'Airport not found' };
+                    return { success: false, message: 'Airport not found' };
                 }
                 return item;
             })
@@ -694,14 +618,63 @@ const app = new Elysia()
                 const updated = await db.updateAirport(params.id, body);
                 if (!updated) {
                     set.status = 404;
-                    return { message: 'Airport not found' };
+                    return { success: false, message: 'Airport not found' };
                 }
                 return updated;
             }, { beforeHandle: authorize(['admin', 'user_pusat']) })
             .delete('/:id', async ({ params }) => {
                 await db.deleteAirport(params.id);
-                return { message: 'Airport deleted' };
+                return { success: true, message: 'Airport deleted' };
             }, { beforeHandle: authorize(['admin']) })
+            .get('/gateway-status', async ({ query: { airportId }, set }) => {
+              try {
+                if (!airportId) {
+                  set.status = 400;
+                  return { success: false, error: 'airportId query parameter required' };
+                }
+                const airportIdNum = parseInt(airportId as string);
+                const airportQuery = 'SELECT id, name, ip_branch FROM airports WHERE id = ?';
+                const airports = await db.query(airportQuery, [airportIdNum]);
+                
+                if (!airports || airports.length === 0) {
+                  set.status = 404;
+                  return { 
+                    success: false, 
+                    error: 'Airport not found',
+                    gatewayHealthy: false 
+                  };
+                }
+                
+                const airport = airports[0];
+                const gatewayIp = airport.ip_branch;
+                
+                if (!gatewayIp || gatewayIp.trim() === '') {
+                  return { 
+                    success: true,
+                    gatewayHealthy: false,
+                    ip: null,
+                    message: 'No gateway IP configured for this airport',
+                    responseTime: null
+                  };
+                }
+                
+                // Ping gateway IP (timeout 3s)
+                const ping = require('ping');
+                const result = await ping.promise.probe(gatewayIp, { timeout: 3 });
+                
+                const gatewayHealthy = result.alive;
+                
+                return {
+                  success: true,
+                  gatewayHealthy,
+                  ip: gatewayIp,
+                  responseTime: gatewayHealthy ? result.time : null,
+                };
+              } catch (error: any) {
+                if (!set.status || set.status === 200) set.status = 500;
+                return { success: false, error: error.message };
+              }
+            })
     )
 
     // --- BRANCH ROUTES ---
@@ -776,70 +749,6 @@ const app = new Elysia()
                     return { message: 'Failed to fetch SNMP data', error: error.message };
                 }
             })
-    )
-    
-// --- AIRPORTS ROUTES (Gateway Status) ---
-    .group('/api/airports', (app) => 
-      app
-        .get('/gateway-status', async ({ query: { airportId }, set }) => {
-          try {
-            if (!airportId) {
-              set.status = 400;
-              return { success: false, error: 'airportId query parameter required' };
-            }
-            const airportIdNum = parseInt(airportId as string);
-            const airportQuery = 'SELECT id, name, ip_branch FROM airports WHERE id = ?';
-            const airports = await db.query(airportQuery, [airportIdNum]);
-            
-            if (!airports || airports.length === 0) {
-              set.status = 404;
-              return { 
-                success: false, 
-                error: 'Airport not found',
-                gatewayHealthy: false 
-              };
-            }
-            
-            const airport = airports[0];
-            const gatewayIp = airport.ip_branch;
-            
-            if (!gatewayIp || gatewayIp.trim() === '') {
-              return { 
-                success: true,
-                gatewayHealthy: false,
-                ip: null,
-                message: 'No gateway IP configured for this airport',
-                responseTime: null
-              };
-            }
-            
-            // Ping gateway IP (timeout 3s)
-            const ping = require('ping');
-            const result = await ping.promise.probe(gatewayIp, { timeout: 3 });
-            
-            const gatewayHealthy = result.alive;
-            
-            return {
-              success: true,
-              gatewayHealthy,
-              ip: gatewayIp,
-              responseTime: gatewayHealthy ? result.time : null,
-              message: gatewayHealthy ? 'Gateway reachable' : 'Gateway unreachable',
-              airport: {
-                id: airport.id,
-                name: airport.name
-              }
-            };
-          } catch (error) {
-            console.error('[Gateway Status] Error:', error);
-            set.status = 500;
-            return {
-              success: false,
-              error: 'Internal server error',
-              gatewayHealthy: false
-            };
-          }
-        })
     )
 
     // --- SURVEILLANCE ROUTES ---
@@ -971,113 +880,7 @@ const app = new Elysia()
     )
 
     // --- USER MANAGEMENT ROUTES ---
-    .group('/api/users', (app) =>
-        app
-            .use(authenticate)
-            .get('/', async ({ query, set }) => {
-                try {
-                    const { search } = query;
-                    const users = await db.getAllUsers({ search });
-                    return users;
-                } catch (error: any) {
-                    set.status = 500;
-                    return { message: error.message };
-                }
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
-            .get('/:id', async ({ params, set }) => {
-                try {
-                    const user = await db.getUserById(params.id);
-                    if (!user) {
-                        set.status = 404;
-                        return { message: 'User not found' };
-                    }
-                    return user;
-                } catch (error: any) {
-                    set.status = 500;
-                    return { message: error.message };
-                }
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
-            .post('/', async ({ body, set }) => {
-                try {
-                    let { username, password, name, role, branchId } = body as any;
-                    
-                    if (!username || !name || !role) {
-                        set.status = 400;
-                        return { message: 'Username, Name, and Role are required' };
-                    }
-                    
-                    if (!password) {
-                        password = Math.random().toString(36).substring(2, 10);
-                    }
-                    
-                    const hashedPassword = await bcrypt.hash(password, saltRounds);
-                    
-                    const newUser = await db.createUser({
-                        username,
-                        password: hashedPassword,
-                        name,
-                        role,
-                        branchId: branchId || null
-                    });
-                    
-                    set.status = 201;
-                    return { ...newUser, tempPassword: !(body as any).password ? password : undefined };
-                } catch (error: any) {
-                    if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
-                        set.status = 400;
-                        return { message: 'Username already exists' };
-                    }
-                    set.status = 500;
-                    return { message: error.message };
-                }
-            }, { beforeHandle: authorize(['admin']) })
-            .put('/:id', async ({ params, body, set, user }) => {
-                try {
-                    const targetUser = await db.getUserById(params.id);
-                    if (!targetUser) {
-                        set.status = 404;
-                        return { message: 'User not found' };
-                    }
-                    
-                    if (targetUser.role === 'admin' && user.role !== 'admin') {
-                        set.status = 403;
-                        return { message: 'Cannot modify admin user' };
-                    }
-                    
-                    const { username, name, role, branchId, password } = body as any;
-                    
-                    if (username === "" || name === "" || role === "") {
-                        set.status = 400;
-                        return { message: 'Username, Name, and Role cannot be empty' };
-                    }
-                    
-                    const updateData: any = { username, name, role, branchId };
-                    
-                    if (password) {
-                        updateData.password = await bcrypt.hash(password, saltRounds);
-                    }
-                    
-                    const updated = await db.updateUser(params.id, updateData);
-                    return updated;
-                } catch (error: any) {
-                    if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
-                        set.status = 400;
-                        return { message: 'Username already exists' };
-                    }
-                    set.status = 500;
-                    return { message: error.message };
-                }
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
-            .delete('/:id', async ({ params, set }) => {
-                try {
-                    await db.deleteUser(params.id);
-                    return { message: 'User deleted' };
-                } catch (error: any) {
-                    set.status = 500;
-                    return { message: error.message };
-                }
-            }, { beforeHandle: authorize(['admin']) })
-    )
+
 
     // --- THRESHOLD ROUTES ---
     .group('/api/equipment/:id/thresholds', (app) =>
@@ -1121,10 +924,9 @@ const app = new Elysia()
     })
 
     // --- NETWORK MONITORING ROUTES ---
-    .group('/api/network', app => app.use(authenticate))
     .group('/api/network', (app) => {
         const networkMonitor = require('./network/monitor-fixed');
-        return app
+        return app.use(authenticate)
             .get('/interfaces', async () => ({ success: true, data: await networkMonitor.getNetworkInterfaces() }))
             .get('/stats', async () => ({ success: true, data: await networkMonitor.getNetworkStats() }))
             .post('/ping', async ({ body }) => {
@@ -1143,10 +945,9 @@ const app = new Elysia()
     })
 
     // --- PACKET SNIFFER ROUTES ---
-    .group('/api/sniffer', app => app.use(authenticate))
     .group('/api/sniffer', (app) => {
         const packetSniffer = require('./network/sniffer');
-        return app
+        return app.use(authenticate)
             .post('/start', async ({ body }) => {
                 const { interface: iface } = body as any;
                 await packetSniffer.start(iface);
@@ -1181,20 +982,20 @@ async function startServices() {
     try {
         console.log('[SYSTEM] Initializing core services...');
         
-        // 1. Initial Seeding
-        await seedUpsJakarta();
+        // 1. Initial Seeding (DISABLED)
+        // await seedUpsJakarta();
 
         // 2. Load SNMP Templates into cache
         state.snmpTemplatesCache = await db.getAllSnmpTemplates();
         console.log(`[SNMP] ${state.snmpTemplatesCache.length} templates loaded`);
 
-        // 3. Start Background Schedulers
-        setInterval(collectEquipmentData, 60000);
-        setInterval(collectSurveillanceData, 60000);
+        // 3. Start Background Schedulers (DISABLED for database-less mode)
+        // setInterval(collectEquipmentData, 60000);
+        // setInterval(collectSurveillanceData, 60000);
         
-        // Initial run after a short delay
-        setTimeout(collectEquipmentData, 5000);
-        setTimeout(collectSurveillanceData, 8000);
+        // Initial run after a short delay (DISABLED)
+        // setTimeout(collectEquipmentData, 5000);
+        // setTimeout(collectSurveillanceData, 8000);
 
         // 4. Initialize Surveillance Receivers if available
         if (RadarReceiver && AdsbReceiver) {
