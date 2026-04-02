@@ -18,153 +18,36 @@
 </head>
 <body>
   <!-- Login Modal -->
-  <div class="login-modal hidden" id="loginModal">
+<div class="login-modal hidden" id="loginModal">
     <div class="login-container">
       <div class="login-header">
         <img src="icon.png" alt="Logo" class="login-logo">
         <h2>Equipment Management</h2>
-        <p>Airport Navigation System</p>
+        <p>Direct Login - No Public View</p>
       </div>
       <form id="loginForm" autocomplete="off">
         <div class="form-group">
           <label for="username">Username</label>
-          <input type="text" id="username" name="username" autocomplete="username" required placeholder="Enter username">
+          <input type="text" id="username" name="username" autocomplete="username" required placeholder="admin or superadmin">
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="Enter password">
+          <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="password">
         </div>
-        <div class="form-group">
-          <label for="captchaAnswer">Captcha</label>
-          <div class="captcha-container">
-            <span id="captchaQuestion" class="captcha-question">Loading...</span>
-            <input type="text" id="captchaAnswer" name="captcha" autocomplete="off" required placeholder="Enter answer" style="margin-top: 8px;">
-          </div>
-        </div>
-        <input type="hidden" id="originalCaptchaAnswer">
         <button type="submit" class="btn btn-primary btn-block">
           <i class="fas fa-sign-in-alt"></i> Login
         </button>
       </form>
       <div class="login-info">
-        <p><strong>Demo Accounts:</strong></p>
-        <p>Admin: admin / admin123</p>
-        <p>Pusat: pusat / pusat123</p>
-        <p>Teknisi: teknisi_jayapura / teknisi123</p>
-        <p>User: user / tester123 (NEW)</p>
+        <p><strong>Accounts:</strong></p>
+        <p>admin / admin → Equipment config</p>
+        <p>superadmin / super → Templates</p>
       </div>
     </div>
   </div>
 
   <!-- Public Dashboard (No Login) -->
-  <div class="public-dashboard" id="publicDashboard">
-    <div class="public-header">
-      <div class="logo-container">
-        <img src="icon.png" alt="Logo" class="sidebar-logo">
-        <h2>Technical Operation Center</h2>
-      </div>
-      <button class="btn btn-primary" id="loginBtn">
-        <i class="fas fa-sign-in-alt"></i> Login
-      </button>
-    </div>
-    <div class="public-content">
-      <div class="public-stats">
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-tools"></i></div>
-          <div class="stat-info">
-            <h3>Total</h3>
-            <p class="stat-number" id="publicTotalEquipment">0</p>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon available"><i class="fas fa-check-circle"></i></div>
-          <div class="stat-info">
-            <h3>Normal</h3>
-            <p class="stat-number" id="publicNormalEquipment">0</p>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon in-use"><i class="fas fa-exclamation-triangle"></i></div>
-          <div class="stat-info">
-            <h3>Warning</h3>
-            <p class="stat-number" id="publicWarningEquipment">0</p>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon maintenance"><i class="fas fa-times-circle"></i></div>
-          <div class="stat-info">
-            <h3>Alert</h3>
-            <p class="stat-number" id="publicAlertEquipment">0</p>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon disconnect"><i class="fas fa-unlink"></i></div>
-          <div class="stat-info">
-            <h3>Disconnect</h3>
-            <p class="stat-number" id="publicDisconnectEquipment">0</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="card map-card">
-        <div class="card-body">
-          <div id="publicMapContainer" class="map-container"></div>
-          <div class="map-legend">
-            <span class="legend-item"><span class="legend-dot normal"></span> Normal</span>
-            <span class="legend-item"><span class="legend-dot warning"></span> Warning</span>
-            <span class="legend-item"><span class="legend-dot alert"></span> Alert</span>
-            <span class="legend-item"><span class="legend-dot disconnect"></span> Disconnect</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Equipment by Category - Public View -->
-      <div class="category-card">
-        <!-- <div class="card-header">
-          <h2><i class="fas fa-chart-pie"></i> Equipment by Category</h2>
-        </div> -->
-        <!-- <div class="card-body"> -->
-          <div class="category-stats" id="publicCategoryStats">
-            <div class="category-item">
-              <div class="category-icon" style="background: #3b82f6;"><i class="fas fa-tower-broadcast"></i></div>
-              <div class="category-info">
-                <h4>Communication</h4>
-                <p id="publicCommCount">0</p>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-icon" style="background: #10b981;"><i class="fas fa-compass"></i></div>
-              <div class="category-info">
-                <h4>Navigation</h4>
-                <p id="publicNavCount">0</p>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-icon" style="background: #f59e0b;"><i class="fas fa-satellite-dish"></i></div>
-              <div class="category-info">
-                <h4>Surveillance</h4>
-                <p id="publicSurvCount">0</p>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-icon" style="background: #8b5cf6;"><i class="fas fa-server"></i></div>
-              <div class="category-info">
-                <h4>Data Processing</h4>
-                <p id="publicDataCount">0</p>
-              </div>
-            </div>
-            <div class="category-item">
-              <div class="category-icon" style="background: #ef4444;"><i class="fas fa-bolt"></i></div>
-              <div class="category-info">
-                <h4>Support</h4>
-                <p id="publicSupportCount">0</p>
-              </div>
-            </div>
-          </div>
-        <!-- </div> -->
-      </div>
-    </div>
-  </div>
+<!-- Removed public dashboard - direct to app -->
 
   <!-- Logout Confirmation Modal -->
   <div class="modal-overlay hidden" id="logoutModal">
@@ -259,6 +142,21 @@
               </div>
               <small style="color: var(--text-muted); display: block; margin-top: 4px;">Abaikan status Gateway Cabang dan langsung ping ke alat</small>
             </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="equipmentLat">Latitude</label>
+              <input type="number" id="equipmentLat" name="equipmentLat" step="any" placeholder="e.g. -2.5768">
+            </div>
+            <div class="form-group">
+              <label for="equipmentLng">Longitude</label>
+              <input type="number" id="equipmentLng" name="equipmentLng" step="any" placeholder="e.g. 140.5163">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: -10px; margin-bottom: 20px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="enableMapPick('equipment')" title="Pick location from map">
+              <i class="fas fa-map-marker-alt"></i> Pick from Map
+            </button>
           </div>
           <div class="form-group">
             <label for="equipmentDescription">Description</label>
@@ -592,7 +490,7 @@
   <div class="modal-overlay hidden" id="airportModal">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-plane"></i> <span id="airportModalFormTitle">Add New Airport</span></h3>
+        <h3><i class="fas fa-plane"></i> <span id="airportModalFormTitle">Airport Configuration</span></h3>
         <button class="modal-close" id="closeAirportModal">
           <i class="fas fa-times"></i>
         </button>
@@ -619,6 +517,11 @@
               <label for="airportLng">Longitude</label>
               <input type="number" step="0.0001" id="airportLng" name="airportLng" autocomplete="off" required placeholder="e.g., 140.5164">
             </div>
+          </div>
+          <div class="form-group-ux" style="margin-top: -10px; margin-bottom: 20px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="enableMapPick('airport')" title="Pick location from map">
+              <i class="fas fa-map-marker-alt"></i> Pick from Map
+            </button>
           </div>
           <div class="form-group-ux">
             <label for="airportIpBranch">IP Gateway</label>
@@ -966,11 +869,11 @@
           <i class="fas fa-building"></i>
           <span>Cabang</span>
         </a>
-        <a href="#" class="nav-item" data-section="equipment">
+        <a href="#" class="nav-item hidden-initial" data-section="equipment" id="equipmentNavItem">
           <i class="fas fa-tools"></i>
           <span>Equipment</span>
         </a>
-        <a href="#" class="nav-item" data-section="airports">
+        <a href="#" class="nav-item hidden-initial" data-section="airports" id="airportsNavItem">
           <i class="fas fa-plane"></i>
           <span>Airports</span>
         </a>
@@ -982,25 +885,25 @@
         </a> -->
         
         
-        <a href="#" class="nav-item" data-section="equipment-logs" id="equipmentLogsNavItem">
+        <a href="#" class="nav-item hidden-initial" data-section="equipment-logs" id="equipmentLogsNavItem">
           <i class="fas fa-history"></i>
           <span>Equipment Logs</span>
         </a>
-        <a href="#" class="nav-item" data-section="users" id="usersNavItem">
+        <a href="#" class="nav-item hidden-initial" data-section="users" id="usersNavItem">
           <i class="fas fa-users"></i>
           <span>User Management</span>
         </a>
         <!-- Equipment Templates - Data Parsing Templates -->
-        <a href="#" class="nav-item" data-section="equipment-templates" id="equipmentTemplatesNavItem">
+        <a href="#" class="nav-item hidden-initial" data-section="equipment-templates" id="equipmentTemplatesNavItem">
           <i class="fas fa-cogs"></i>
           <span>Equipment Templates</span>
         </a>
         <!-- Configuration - SNMP Tools, Network Monitor, Threshold Settings available in Configuration section -->
-        <a href="#" class="nav-item" data-section="network-tools" id="networkToolsNavItem">
+        <a href="#" class="nav-item hidden-initial" data-section="network-tools" id="networkToolsNavItem">
           <i class="fas fa-network-wired"></i>
           <span>Network Tools</span>
         </a>
-        <a href="#" class="nav-item" data-section="network-monitor" id="networkMonitorNavItem">
+        <a href="#" class="nav-item hidden-initial" data-section="network-monitor" id="networkMonitorNavItem">
           <i class="fas fa-chart-line"></i>
           <span>Network Monitor</span>
         </a>
@@ -1011,11 +914,27 @@
         </a> -->
       </nav>
       <div class="sidebar-footer">
-        <div class="sidebar-user-panel" id="sidebarUserPanel">
+        <!-- Sidebar Login Form (Shown when not logged in) -->
+        <div id="sidebarLoginForm" class="sidebar-login-container">
+          <form id="sidebarAuthForm" class="sidebar-auth-form">
+            <div class="sidebar-auth-group">
+              <input type="text" id="sidebarUsername" placeholder="Username" required>
+            </div>
+            <div class="sidebar-auth-group">
+              <input type="password" id="sidebarPassword" placeholder="Password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn-small">
+              <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+          </form>
+        </div>
+
+        <!-- User Panel (Shown when logged in) -->
+        <div class="sidebar-user-panel hidden" id="sidebarUserPanel">
           <i class="fas fa-user-circle"></i>
           <span id="sidebarUserName">User</span>
         </div>
-        <button class="sidebar-logout-btn" id="sidebarLogoutBtn">
+        <button class="sidebar-logout-btn hidden" id="sidebarLogoutBtn">
           <i class="fas fa-sign-out-alt"></i>
           <span>Logout</span>
         </button>
@@ -1263,9 +1182,6 @@
                   <i class="fas fa-search"></i>
                   <input type="text" id="searchAirports" placeholder="Search airports..." aria-label="Search airports">
                 </div>
-                <button class="btn btn-primary" id="addAirportBtn">
-                  <i class="fas fa-plus"></i> Add Airport
-                </button>
               </div>
             </div>
             <div class="card-body">
@@ -1282,7 +1198,7 @@
                   </thead>
                   <tbody id="airportsTableBody">
                     <tr>
-                      <td colspan="4" class="empty-state">Loading airports...</td>
+                      <td colspan="5" class="empty-state">Loading airports...</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2208,6 +2124,33 @@
   <script src="network-tools.js"></script>
   <script src="network-monitoring-dashboard.js"></script>
   <script src="surveillance-app.js"></script>
-  <script src="template-app.js"></script>
+  <script src="template-app.js"></script>  <!-- Map Picker Modal -->
+  <div class="modal-overlay hidden" id="mapPickerModal" style="z-index: 11000;">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3><i class="fas fa-map-marked-alt"></i> Select Location</h3>
+        <button class="modal-close" id="closeMapPickerModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 0; position: relative;">
+        <div id="mapPickerContainer" style="height: 450px; width: 100%; border-bottom: 5px solid var(--primary-color);"></div>
+        <div style="padding: 15px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-secondary);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div id="pickerStatus" style="font-size: 0.9rem; color: var(--text-muted);">
+              Selected: <span id="pickedCoordsText">None (Click on map)</span>
+            </div>
+            <button class="btn btn-primary" id="confirmLocationBtn" disabled style="padding: 10px 20px;">
+              <i class="fas fa-check"></i> OK, Use this coordinate
+            </button>
+          </div>
+          <small style="color: var(--text-muted); font-size: 0.8rem;">
+            Tip: You can drag the marker after placing it for more precision.
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
