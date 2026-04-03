@@ -239,7 +239,7 @@ function renderEquipmentTable(data) {
   if (!tbody) return;
   
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No equipment available</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No equipment available</td></tr>';
     return;
   }
   
@@ -248,7 +248,7 @@ function renderEquipmentTable(data) {
       <td style="text-align: center;"><span class="status-dot ${item.status.toLowerCase()}"></span></td>
       <td style="text-align: center;">${item.name}</td>
       <td style="text-align: center;">${item.category}</td>
-      <td style="text-align: center;">${airportsData.find(a => a.id == item.airportId)?.name || 'N/A'}</td>
+      <td style="text-align: center; display: none;">${airportsData.find(a => a.id == item.airportId)?.name || 'N/A'}</td>
       <td style="text-align: center;"><span class="status-badge ${item.status}">${item.status}</span></td>
       <td style="text-align: center;">${item.lat}, ${item.lng}</td>
       <td style="text-align: center;">
@@ -349,6 +349,11 @@ async function loadAirports() {
     if (airportSelect) {
       airportSelect.innerHTML = '<option value="">Select Airport</option>' + 
         airportsData.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      
+      // Auto-select first airport if none chosen
+      if (airportsData.length > 0 && !airportSelect.value) {
+        airportSelect.value = airportsData[0].id;
+      }
     }
   } catch (err) { console.error('Airports load error:', err); }
 }
@@ -422,23 +427,33 @@ function updateAuthUI() {
 
 async function handleLogin(e) {
   e.preventDefault();
-  const u = document.getElementById('sidebarUsername').value;
-  const p = document.getElementById('sidebarPassword').value;
+  const username = document.getElementById('sidebarUsername').value;
+  const password = document.getElementById('sidebarPassword').value;
   
-  if (u === 'admin' && p === 'ciko') {
-    currentUser = { username: 'Admin', role: 'admin' };
-  } else if (u === 'admin' && p === 'ciko1234') {
-    currentUser = { username: 'Super Admin', role: 'superadmin' };
-  }
-  
-  if (currentUser) {
-    authToken = 'static-token-' + Date.now();
-    localStorage.setItem('authToken', authToken);
-    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    updateAuthUI();
-    loadEquipment();
-  } else {
-    alert('Invalid credentials');
+  try {
+    const res = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+      authToken = result.token;
+      currentUser = result.user;
+      localStorage.setItem('authToken', authToken);
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      updateAuthUI();
+      loadEquipment();
+      loadStats();
+      loadAirports();
+    } else {
+      alert(result.message || 'Invalid credentials');
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    alert('An error occurred during login');
   }
 }
 
@@ -505,6 +520,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('addEquipmentBtn').addEventListener('click', () => {
     document.getElementById('equipmentForm').reset();
     document.getElementById('equipmentId').value = '';
+    
+    // Auto-select first airport if available
+    const airportSelect = document.getElementById('equipmentAirport');
+    if (airportSelect && airportsData.length > 0) {
+      airportSelect.value = airportsData[0].id;
+    }
+    
     document.getElementById('modalFormTitle').textContent = 'Add New Equipment';
     document.getElementById('equipmentModal').classList.remove('hidden');
   });

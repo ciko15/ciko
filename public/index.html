@@ -103,7 +103,7 @@
                 <option value="Support">Support</option>
               </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" style="display: none;">
               <label for="equipmentAirport">Airport</label>
               <select id="equipmentAirport" name="equipmentAirport" required>
                 <option value="">Select Airport</option>
@@ -707,6 +707,11 @@
             <label for="templateDescription">Description</label>
             <textarea id="templateDescription" name="templateDescription" rows="2" autocomplete="off" placeholder="Enter description"></textarea>
           </div>
+          <div class="form-group">
+            <label for="templateParsingLogic">Parsing Logic (JS Sequence)</label>
+            <textarea id="templateParsingLogic" name="templateParsingLogic" rows="4" autocomplete="off" placeholder="e.g., // Step 1: Read OID ..."></textarea>
+            <small style="color: var(--text-muted);">Enter JavaScript sequence or logic for data parsing (Asterix, ADS-B, etc.)</small>
+          </div>
 
           <!-- Parameters Section -->
           <div class="form-group">
@@ -1136,7 +1141,7 @@
                   <option value="Data Processing">Data Processing</option>
                   <option value="Support">Support</option>
                 </select>
-                <select id="filterAirport" class="filter-select">
+                <select id="airportFilter" class="form-control" style="display: none;">
                   <option value="">All Airports</option>
                 </select>
                 <button class="btn btn-primary" id="addEquipmentBtn">
@@ -1152,9 +1157,9 @@
                       <th style="text-align: center;">Status Alat</th>
                       <th style="text-align: center;">Name</th>
                       <th style="text-align: center;">Category</th>
-                      <th style="text-align: center;">Airport</th>
+                      <th style="text-align: center; display: none;">Airport</th>
                       <th style="text-align: center;">Status</th>
-                      <th style="text-align: center;">Connection</th>
+                      <th style="text-align: center;">Coordinates</th>
                       <th style="text-align: center;">Actions</th>
                     </tr>
                   </thead>
@@ -2117,7 +2122,6 @@
 
   <!-- Scripts -->
   <script src="app.js"></script>
-  <script src="app-logs-fix.js"></script>
   <script src="cabang-app.js"></script>
   <script src="config-nav.js"></script>
   <script src="snmp-tools.js"></script>

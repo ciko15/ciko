@@ -1,0 +1,74 @@
+[
+  {
+    "id": 101,
+    "name": "DVOR Sentani",
+    "code": "NAV-DVOR-001",
+    "category": "Navigation",
+    "status": "Normal",
+    "lat": -2.5768,
+    "lng": 140.5163,
+    "airportId": 1,
+    "isActive": true,
+    "snmpConfig": {
+      "enabled": false
+    },
+    "branchId": 1,
+    "description": ""
+  },
+  {
+    "id": 102,
+    "name": "VHF Ground-to-Air",
+    "code": "COM-VHF-001",
+    "category": "Communication",
+    "status": "Warning",
+    "lat": -2.578,
+    "lng": 140.518,
+    "airportId": 1,
+    "isActive": true,
+    "snmpConfig": {
+      "enabled": false
+    },
+    "branchId": 1
+  },
+  {
+    "id": 103,
+    "name": "Radar MSSR",
+    "code": "SURV-MSSR-001",
+    "category": "Surveillance",
+    "status": "Normal",
+    "lat": -2.575,
+    "lng": 140.52,
+    "airportId": 1,
+    "isActive": true,
+    "snmpConfig": {
+      "enabled": false
+    },
+    "branchId": 1
+  },
+  {
+    "name": "test",
+    "code": "sds-171",
+    "category": "Data Processing",
+    "airportId": 1,
+    "status": "Normal",
+    "lat": -2.577,
+    "lng": 140.518,
+    "description": "",
+    "branchId": 1,
+    "id": 1775111180529,
+    "isActive": true
+  },
+  {
+    "name": "Auto-Airport Test",
+    "code": "TEST-001",
+    "category": "Support",
+    "airportId": 1,
+    "status": "Normal",
+    "lat": -2.5768,
+    "lng": 140.5163,
+    "description": "",
+    "branchId": 1,
+    "id": 1775111531489,
+    "isActive": true
+  }
+]

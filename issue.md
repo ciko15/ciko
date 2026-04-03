@@ -1,90 +1,92 @@
-# [FEATURE] Perbaikan Alur Koneksi Alat, Implementasi Threshold Alarm, dan Filter Kategori Map
+# Spesifikasi Implementasi Restrukturisasi Database & UI Equipment
 
-## 📌 Latar Belakang Masalah
-1. **Alur Validasi Data (Dummy/Real) & Koneksi:** Saat ini, sistem (termasuk *generator test*) kadang masih menampilkan atau mencoba memproses data meskipun gateway atau alat dalam kondisi *offline*. Alur autentikasi koneksi harus diperketat agar data tidak di-*generate*/di-*parsing* jika perangkat tidak *reachable*.
-2. **Implementasi Limitasi/Threshold Alarm:** Sistem membutuhkan mekanisme penentuan nilai parameter (batas atas/bawah) untuk mengetahui secara spesifik parameter mana yang menyebabkan alat berstatus **Warning** atau **Alarm**.
-3. **Filter Map Dashboard:** Filter berdasarkan *Status* (Normal, Warning, Disconnect) di Map Dashboard sudah berfungsi, namun filter berdasarkan *Kategori Alat* (Communication, Navigation, Surveillance, Data Processing, Support) masih gagal memfilter marker bandara yang ada di Map.
+Dokumen ini berisi spesifikasi teknis dan terstruktur mengenai *issue* restrukturisasi penyimpanan dan tampilan data *equipment*. Instruksi ini didesain agar sangat spesifik dan bersahabat untuk didistribusikan kepada *programmer* baru maupun agen AI. Gunakan daftar tugas (*task list*) di bawah untuk melacak proses pengerjaan.
 
----
+## 📝 1. Pembaruan Skema `equipment`
+Ubah struktur data utama `equipment` (mis. pada file `equipment_config.json` atau tabel *database* yang relevan) dengan format berikut:
 
-## 📋 Tugas & Tahapan Implementasi
-Instruksi di bawah ini ditujukan untuk programmer yang mengimplementasikan fitur ini. Kerjakan secara berurutan.
-
-### Task 1: Perbaikan Alur Autentikasi Koneksi & Parsing Data (Backend)
-**File Target:** `src/server.ts`, `src/scheduler/collector.js` (atau file scheduler terkait pengumpulan data), `src/utils/network.ts`
-
-**Tujuan:** Pastikan tidak ada parsing data (baik SNMP asli maupun generator simulasi) jika perangkat gagal di-ping secara berjenjang.
-
-**Langkah-langkah:**
-1. **Gunakan Logika Ping Bertingkat (Tiered Ping) di Scheduler:** 
-   Pada fungsi scheduler (seperti `collectEquipmentData`), sebelum memanggil `fetchAndParseData(item)`:
-   - Ambil konfigurasi `ip_branch` (Gateway) dan IP Alat.
-   - Cek flag `bypassGateway` pada `snmpConfig`.
-   - **Langkah A:** Jika `bypassGateway` false, ping `ip_branch`. Jika RTO (Offline), langsung set status equipment menjadi `Disconnect` dengan log "Gateway Unreachable". Jangan lanjutkan ke parsing.
-   - **Langkah B:** Jika Gateway sukses (atau `bypassGateway` true), ping IP Alat. Jika RTO, set status menjadi `Disconnect` dengan log "Device Unreachable". Jangan lanjutkan ke parsing.
-2. **Eksekusi Parsing:**
-   - Jika Langkah A dan B sukses, panggil fungsi `fetchAndParseData` berdasarkan template alat yang dipilih.
-   - Khusus untuk **Simulator/Generator**: Generator *hanya* boleh menghasilkan angka acak jika alat tersebut lulus validasi ping jaringan ini.
-
-### Task 2: Implementasi Logika Threshold (Limitasi Alarm/Warning)
-**File Target:** `src/utils/thresholdEvaluator.js`, `src/server.ts`, `public/app.js`
-
-**Tujuan:** Menganalisis nilai dari hasil parsing terhadap batas (threshold) yang ditentukan di template, dan menandai parameter mana yang bermasalah.
-
-**Saran & Langkah Implementasi:**
-1. **Penyempurnaan Struktur Mapping:** Saat ini di dalam `oidMappings` database sudah ada kerangka untuk `warningThreshold` dan `criticalThreshold`. 
-2. **Buat Fungsi Evaluator (`src/utils/thresholdEvaluator.js`):**
-   - Buat fungsi yang menerima dua parameter: `parsedData` (data mentah) dan `templateMappings` (konfigurasi OID dari DB).
-   - Loop melalui setiap *key* di `parsedData`. Bandingkan nilainya dengan `warningThreshold` dan `criticalThreshold` dari mapping-nya.
-   - Fungsi ini harus mengembalikan object:
-     ```json
-     {
-       "overallStatus": "Alert", // (Normal | Warning | Alert)
-       "triggeredParameters": ["temperature", "voltage"] // array parameter yang melanggar batas
-     }
-     ```
-3. **Simpan Fault Parameter ke Database:**
-   - Modifikasi payload saat membuat log (`db.createEquipmentLog`). Masukkan properti `triggeredParameters` ke dalam object `data` agar histori alarm tersimpan dengan jelas.
-4. **Visualisasi di Frontend (`public/app.js`):**
-   - Pada fungsi `window.viewSnmpData`, tangkap array `triggeredParameters` dari response backend.
-   - Tambahkan *conditional styling*: Jika nama parameter berada di dalam list `triggeredParameters`, ubah warna teks box nilainya menjadi Merah (Alert) atau Kuning (Warning) lengkap dengan ikon peringatan (`<i class="fas fa-exclamation-circle"></i>`).
-
-### Task 3: Perbaikan Filter Kategori pada Map Dashboard
-**File Target:** `public/app.js`
-
-**Tujuan:** Mengklik card "Kategori Alat" (Communication, Navigation, dsb.) di dashboard harus memfilter marker yang muncul di Peta (hanya menampilkan bandara yang memiliki alat di kategori tersebut).
-
-**Langkah-langkah:**
-1. **Siapkan State Filter:** 
-   Di bagian atas `app.js`, tambahkan global state:
-   `let currentMapCategoryFilter = null;`
-2. **Modifikasi Logic `updateMapMarkers()`:**
-   - Buka fungsi `updateMapMarkers()`. Sebelum melakukan `airportsData.forEach(...)` untuk merender marker, filter datanya terlebih dahulu:
-     ```javascript
-     let airportsToRender = airportsData;
-     if (currentMapCategoryFilter && currentMapCategoryFilter !== 'Total') {
-         airportsToRender = airportsData.filter(airport => {
-             const count = airport.activeEquipmentCount[currentMapCategoryFilter] || 0;
-             return count > 0; // Hanya render bandara yang punya alat kategori ini
-         });
-     }
-     // Lanjutkan mapping layer leaflet dari airportsToRender
-     ```
-3. **Hubungkan Event Click Kategori ke Map:**
-   - Buka fungsi `initDashboardFilters()`.
-   - Pada bagian `2. Category Items`, saat ini behavior-nya adalah menavigasi paksa ke menu Cabang menggunakan `switchMainSection('cabang')`.
-   - Ubah logika *click listener* ini (atau tambahkan behavior opsional) agar ketika di-klik:
-     - Mengubah state `currentMapCategoryFilter = category;`
-     - Memanggil ulang fungsi `updateMapMarkers();` untuk memperbarui peta seketika.
-     - *(Opsional UX)*: Tambahkan styling `border` atau `opacity` untuk menandakan kategori mana yang saat ini sedang aktif di-klik.
+- [ ] **`id`**: *String / UUID* (Bersifat *unique*)
+- [ ] **`name`**: *String* (Nama alat)
+- [ ] **`category`**: *Enum / String*
+  - Pilihan wajib: `Communication`, `Navigation`, `Surveillance`, `Data Processing`, `Support`
+- [ ] **`sup_category`**: *String*
+  - Mengambil data berelasi / referensi dinamis terhadap daftar *database* `sup_category`.
+  - **Kebutuhan Form UI**: Tambahkan fitur / tombol agar pengguna dapat menciptakan data *sup_category* baru langsung dari area *form* UI pemasukan *equipment* (*on-the-fly*) bila opsinya dirasa kurang.
+- [ ] **`merk`**: *String* (Set nilai *default* ke `"-"` jika tidak diinput)
+- [ ] **`type`**: *String* (Set nilai *default* ke `"-"` jika tidak diinput)
+- [ ] **`status`**: *Enum / String*
+  - Pilihan wajib: `Active`, `Inactive`
+- [ ] **`status_ops`**: *Enum / String*
+  - Pilihan wajib: `Normal`, `Warning`, `Alarm`, `Disconnect`
+- [ ] **`description`**: *Text / String* (Keterangan lebih lanjut tentang alat)
+- [ ] **`equipt_auth`**: *Array / Relational data* (Ini memicu fitur sinkronisasi pembuatan/penambahan IP jaringan dari UI Form agar datanya otomatis disematkan atau mengalir ke entitas tabel `equipment_otentication_config`)
 
 ---
 
-## 🎯 Kriteria Penerimaan (Acceptance Criteria)
-- [ ] Scheduler mengabaikan pembuatan log/simulasi data jika IP Gateway atau Alat dinyatakan RTO.
-- [ ] Hasil SNMP atau generator membawa flag/status parameter individu yang melanggar threshold.
-- [ ] Modal *View SNMP Data* di Frontend berhasil me-highlight parameter bermasalah dengan warna merah/kuning.
-- [ ] Marker pada Dashboard Map akan menghilang jika memfilter kategori yang tidak terdapat pada bandara tersebut.
+## 📝 2. Penciptaan Database / Koleksi `sup_category`
+Buat skema penampungan baru (berupa Tabel / File JSON) khusus untuk sumber data (*supply*) *dropdown* *sub-category*.
 
-**Catatan untuk AI / Programmer:** 
-Cukup ubah bagian-bagian yang disebutkan di atas. Fokus pada kejelasan struktur, hindari merusak alur ping eksisting (`securePing` / `pingTiered`) yang sudah ada di sistem. Gunakan fallback API apabila terdapat kegagalan pada network testing.
+- [ ] Buat file sistem untuk `sup_category`.
+- [ ] Lakukan injeksi (*seed*) data basis bawaannya secara terkelompok:
+  - **Communication**: VHF A/G, VSCS, HF, VHF G/G, DS, VSAT, Voice REC, D-ATIS
+  - **Navigation**: DVOR, DME, ILS-TDME, ILS-LLZ, ILS-GP, ILS-IM, ILS-MM, ILS-OM, NDB, GNSS, MLS, GBAS
+  - **Surveillance**: RADAR, ADSB, ADSC, MLAT
+  - **Data Processing**: ATCAS, AMSC, AMHS, ASMGCS
+  - **Support**: G-LLZ, G-RADAR, G-OPS, UPS, GENSET
+- [ ] **Kebutuhan Integrasi Form**: Hubungkan relasi interaksinya. Jika ada penambahan pada entitas ini, maka formulir isian `equipment` pada *frontend* otomatis langsung mengakomodir pilhannya. Form *equipment* memuat logika *dependent/cascading list*: isi dari tipe dropdown *sup_category* berpatokan pada pilihan form sebelumnya di field `category`.
+
+---
+
+## 📝 3. Migrasi Entitas `templates_config` menjadi `equipment_parsing_config`
+Tabel identifikasi *setup* parser yang sudah ada perlu diubah tata nama penampungnya.
+
+- [ ] Ubah (*rename*) tabel/file dari `templates_config` menjadi nama baru yakni `equipment_parsing_config`.
+- [ ] Sesuaikan skema struktur propertinya menjadi:
+  - **`id`**: *String / UUID* (Bersifat *unique*)
+  - **`name`**: *String* (Contoh: "DVOR MARU 220")
+  - **`category`**: *String* (Nilainya dibatasi/menarik referensi dari list `category` *equipment*: seperti `Navigation` dst.)
+  - **`files`**: *String / Path Directory* (Lokasi letaknya modul *parser code*, contoh: `"/public/parsers/asterix.js"`)
+- [ ] *Search-and-Replace (Refleksi di kode keseluruhan)*: Modifikasi konfigurasi *backend route / REST API endpoints*, *frontend fetch() parameter*, serta seluruh perumusan kodenya dari merujuk ke tabel lama (`templates_config`) menjadi nama yang benar (`equipment_parsing_config`).
+
+---
+
+## 📝 4. Penciptaan Database / Koleksi `equipment_otentication_config`
+Menjembatani akses otentikasi IP ke banyak komponen riil. Karena secara kenyataan satu entitas *equipment* utama bisa terdiri dari banyak susunan sub-komponen (yang mana tiap komponen dapat punya alamat jaringannya sendiri).
+
+- [ ] Buat file/tabel `equipment_otentication_config`.
+- [ ] Pastikan susunan kerangka datanya mengandung:
+  - **`id`**: *String / UUID* (Bersifat *unique*)
+  - **`name`**: *String* (Nama bagian spesifik per komponen. Contoh: "TX 1 VHF Primary" atau "RX 2")
+  - **`equipt_id`**: *String / Relasi* (*Foreign Key*. Diisi secara mutlak oleh sistem mengambil nilai / me*lookup* `id` spesifik dari data *equipment* yang ada)
+  - **`ip_address`**: *String (Format IP)* (Alamat IPv4 / IPv6 dari perangkat penunjang komponen untuk dikontak *backend*)
+
+---
+
+## 📝 5. Penciptaan Database / Koleksi `limitation_config`
+Tabel mandiri penyimpan kriteria parameter batas keamanan angka alarm untuk toleransi sensor peralatan instrumen.
+
+- [ ] Buat file/tabel bernama `limitation_config`. Format properti yang harus ada berupa:
+  - **`id`**: *String / UUID* (Bersifat *unique*)
+  - **`name`**: *String* (Indikator label, Contohnya: "[DDM] LLZ", atau "GP")
+  - **`category`**: *String* (Nilai persis sama seperti *category* spesifik tipe alat tersebut)
+  - **`equipt_id`**: *String / Relasi* (Merujuk *equipment id* mana limitasi parameter ini diberlakukan)
+  - **`value`**: *Number / String* (Nilai normal idealnya. Contoh: "0")
+  - **`wlv`**: *Number / String* (*Warning Low Value* / batas peringatan rendah. Contoh: "-2" ke bawah)
+  - **`alv`**: *Number / String* (*Alarm Low Value* / toleransi minimum kegagalan. Contoh: "-4" ke bawah)
+  - **`whv`**: *Number / String* (*Warning High Value* / batas peringatan atas. Contoh: "2")
+  - **`ahv`**: *Number / String* (*Alarm High Value* / toleransi maksimum lonjakan. Contoh: "4")
+- [ ] **Kebutuhan Form UI**: Terdapat rekayasa filter data. Pada *dropdown* *form input* untuk menyeleksi perangkat (`equipt_id`), opsi yang bisa dipilih hanya alat spesifik yang nilai kategorinya sesuai dan sejajar (*filter match*) dengan kategori (*Field Category*) yang sudah ditentukan sebelumnya oleh user.
+
+---
+
+## 📝 6. Standar Revamp Komponen UI (Form & Interface Detail View)
+Syarat penyesuaian fungsional pada ranah tatap muka / antarmuka pengguna sehubungan lima perubahan backend di atas:
+
+- [ ] **Halaman *Create/Update Equipment***
+  - Form tidak diizinkan menggunakan isian teks manual statis lagi untuk *Category* & *Sub-category*, gantilah dengan *Select Dropdowns* yang dinamis (*dependent lists*).
+  - Terdapat mekanisme penyisipan antarmuka ("*Add Sub-Category / Add Item*") yang berdekatan dengan *flow form* utama, agar transisi pembuatan baru tak merepotkan admin.
+  - Untuk otentikasi UI (seperti pembuatan relasi data `equipment_otentication_config`) buatlah fitur semacam struktur *repeater box* atau list *Add IP component* agar berjejer menyatu dalam proses pendataan alat utamanya.
+- [ ] **Halaman *Detail/View Equipment*** (Dashboard Spesifikasi Detail)
+  - Buat bagian terpisah (segmentasi jelas) menjabarkan label sederhana alat (*Merk, type, keterangan, status aktif, status operasional*).
+  - Tampilkan data turunan berupa bentuk **Tabel Bersarang / Nested Grid / Kartu** untuk menyuguhkan list IP yang masuk ke spesifikasi `equipment_otentication_config` si alat tersebut.
+  - Sediakan panel / tabel rekapitulasi batasan *threshold* limitasi toleransinya (nilai wlv, alv, ahv, whv bersumber di entitas `limitation_config`) sehigga bisa dilihat tanpa perlu pindah buka menu lain.

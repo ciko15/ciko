@@ -1,14 +1,38 @@
 const fs = require('fs');
 const path = require('path');
-const AIRPORT_CONFIG_PATH = path.join(__dirname, 'airport_config.json');
 
-function readAirportConfig() {
+// --- JSON CONFIG PATHS ---
+const AIRPORT_CONFIG_PATH = path.join(__dirname, 'airport_config.json');
+const EQUIPMENT_CONFIG_PATH = path.join(__dirname, 'equipment_config.json');
+const USERS_CONFIG_PATH = path.join(__dirname, 'users_config.json');
+const TEMPLATES_CONFIG_PATH = path.join(__dirname, 'templates_config.json');
+
+// --- GENERIC JSON HELPERS ---
+function readJson(filePath, defaultValue = []) {
   try {
-    const data = fs.readFileSync(AIRPORT_CONFIG_PATH, 'utf8');
+    if (!fs.existsSync(filePath)) return defaultValue;
+    const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (err) {
-    console.error('Error reading airport config:', err);
-    return { 
+    console.error(`Error reading JSON from ${filePath}:`, err);
+    return defaultValue;
+  }
+}
+
+function writeJson(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error(`Error writing JSON to ${filePath}:`, err);
+    return false;
+  }
+}
+
+// --- AIRPORT CONFIG HELPERS ---
+function readAirportConfig() {
+  const data = readJson(AIRPORT_CONFIG_PATH, null);
+  return data || { 
       id: 1, 
       name: 'Bandara Sentani', 
       city: 'Jayapura', 
@@ -18,32 +42,13 @@ function readAirportConfig() {
       status: 'Normal',
       totalEquipment: 3 
     };
-  }
 }
 
 function writeAirportConfig(data) {
-  try {
-    fs.writeFileSync(AIRPORT_CONFIG_PATH, JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Error writing airport config:', err);
-  }
+  return writeJson(AIRPORT_CONFIG_PATH, data);
 }
 
-// --- IN-MEMORY DATABASE REPLACEMENT ---
-// This file replaces the MySQL dependency with static in-memory arrays.
-// Changes are persistent as long as the server is running.
-
-// airportsDB array is now replaced by airport_config.json
-
-let equipmentDB = [
-  { id: 101, name: 'DVOR Sentani', code: 'NAV-DVOR-001', category: 'Navigation', status: 'Normal', lat: -2.5768, lng: 140.5163, airportId: 1, isActive: true, snmpConfig: { enabled: false } },
-  { id: 102, name: 'VHF Ground-to-Air', code: 'COM-VHF-001', category: 'Communication', status: 'Warning', lat: -2.5780, lng: 140.5180, airportId: 1, isActive: true, snmpConfig: { enabled: false } },
-  { id: 103, name: 'Radar MSSR', code: 'SURV-MSSR-001', category: 'Surveillance', status: 'Normal', lat: -2.5750, lng: 140.5200, airportId: 1, isActive: true, snmpConfig: { enabled: false } }
-];
-let snmpTemplatesDB = [
-  { id: 'dvor_maru_220', name: 'DVOR MARU 220', isDefault: true },
-  { id: 'dme_maru_310_320', name: 'DME MARU 310/320', isDefault: true }
-];
+// --- IN-MEMORY DATA (HISTORICAL/NON-PERSISTENT) ---
 let equipmentLogsDB = [];
 let thresholdSettingsDB = [];
 let surveillanceStationsDB = [];
@@ -51,9 +56,9 @@ let radarTargetsDB = [];
 let adsbAircraftDB = [];
 let surveillanceLogsDB = [];
 
-// --- HELPER WRAPPER ---
+// --- HELPER WRAPPER (DEPRECATED) ---
 async function query(sql, params = []) {
-  console.log('[In-Memory DB] Mock query call ignored:', sql);
+  console.log('[JSON DB] MySQL query call ignored:', sql);
   return [];
 }
 
@@ -97,7 +102,8 @@ async function deleteAirport(id) {
 
 // --- EQUIPMENT ---
 async function getAllEquipment(filters = {}) {
-  let filtered = [...equipmentDB];
+  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  let filtered = [...equipmentList];
   
   if (filters.category) {
     filtered = filtered.filter(e => e.category === filters.category);
@@ -124,30 +130,33 @@ async function getAllEquipment(filters = {}) {
 }
 
 async function getEquipmentStatsSummary() {
+  const equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
   const stats = {
-    total: equipmentDB.length,
+    total: equipmentList.length,
     statuses: [
-      { status: 'Normal', count: equipmentDB.filter(e => e.status === 'Normal').length },
-      { status: 'Warning', count: equipmentDB.filter(e => e.status === 'Warning').length },
-      { status: 'Alert', count: equipmentDB.filter(e => e.status === 'Alert').length },
-      { status: 'Disconnect', count: equipmentDB.filter(e => e.status === 'Disconnect').length }
+      { status: 'Normal', count: equipmentList.filter(e => e.status === 'Normal').length },
+      { status: 'Warning', count: equipmentList.filter(e => e.status === 'Warning').length },
+      { status: 'Alert', count: equipmentList.filter(e => e.status === 'Alert').length },
+      { status: 'Disconnect', count: equipmentList.filter(e => e.status === 'Disconnect').length }
     ],
     categories: [
-      { category: 'Communication', count: equipmentDB.filter(e => e.category === 'Communication').length },
-      { category: 'Navigation', count: equipmentDB.filter(e => e.category === 'Navigation').length },
-      { category: 'Surveillance', count: equipmentDB.filter(e => e.category === 'Surveillance').length },
-      { category: 'Data Processing', count: equipmentDB.filter(e => e.category === 'Data Processing').length },
-      { category: 'Support', count: equipmentDB.filter(e => e.category === 'Support').length }
+      { category: 'Communication', count: equipmentList.filter(e => e.category === 'Communication').length },
+      { category: 'Navigation', count: equipmentList.filter(e => e.category === 'Navigation').length },
+      { category: 'Surveillance', count: equipmentList.filter(e => e.category === 'Surveillance').length },
+      { category: 'Data Processing', count: equipmentList.filter(e => e.category === 'Data Processing').length },
+      { category: 'Support', count: equipmentList.filter(e => e.category === 'Support').length }
     ]
   };
   return stats;
 }
 
 async function getEquipmentById(id) {
-  return equipmentDB.find(e => e.id == id) || null;
+  const equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  return equipmentList.find(e => e.id == id) || null;
 }
 
 async function createEquipment(data) {
+  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
   const newEquip = { 
     ...data, 
     id: Date.now(), 
@@ -156,64 +165,110 @@ async function createEquipment(data) {
     lng: parseFloat(data.lng) || 0,
     isActive: data.isActive !== undefined ? (data.isActive === true || data.isActive === 'true') : true
   };
-  equipmentDB.push(newEquip);
+  equipmentList.push(newEquip);
+  writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
   return newEquip;
 }
 
 async function updateEquipment(id, data) {
-  const index = equipmentDB.findIndex(e => e.id == id);
+  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  const index = equipmentList.findIndex(e => e.id == id);
   if (index !== -1) {
     const updated = { 
-      ...equipmentDB[index], 
+      ...equipmentList[index], 
       ...data,
-      lat: data.lat !== undefined ? parseFloat(data.lat) : equipmentDB[index].lat,
-      lng: data.lng !== undefined ? parseFloat(data.lng) : equipmentDB[index].lng,
-      isActive: data.isActive !== undefined ? (data.isActive === true || data.isActive === 'true') : equipmentDB[index].isActive
+      lat: data.lat !== undefined ? parseFloat(data.lat) : equipmentList[index].lat,
+      lng: data.lng !== undefined ? parseFloat(data.lng) : equipmentList[index].lng,
+      isActive: data.isActive !== undefined ? (data.isActive === true || data.isActive === 'true') : equipmentList[index].isActive
     };
-    equipmentDB[index] = updated;
+    equipmentList[index] = updated;
+    writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
     return updated;
   }
   return null;
 }
 
 async function updateEquipmentStatus(id, status) {
-  const index = equipmentDB.findIndex(e => e.id == id);
+  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  const index = equipmentList.findIndex(e => e.id == id);
   if (index !== -1) {
-    equipmentDB[index].status = status;
+    equipmentList[index].status = status;
+    writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
   }
 }
 
 async function deleteEquipment(id) {
-  equipmentDB = equipmentDB.filter(e => e.id != id);
+  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  const newList = equipmentList.filter(e => e.id != id);
+  writeJson(EQUIPMENT_CONFIG_PATH, newList);
 }
 
 // --- SNMP TEMPLATES ---
 async function getAllSnmpTemplates() {
-  return snmpTemplatesDB;
+  const templates = readJson(TEMPLATES_CONFIG_PATH);
+  return templates;
 }
 
 async function getSnmpTemplateById(id) {
-  return snmpTemplatesDB.find(t => t.id == id) || null;
+  const templates = readJson(TEMPLATES_CONFIG_PATH);
+  return templates.find(t => t.id == id || t.name == id) || null;
 }
 
 async function createSnmpTemplate(data) {
-  const newTemp = { ...data, id: data.id || `custom_${Date.now()}` };
-  snmpTemplatesDB.push(newTemp);
+  let templates = readJson(TEMPLATES_CONFIG_PATH);
+  const newTemp = { 
+    id: data.id || `custom_${Date.now()}`,
+    name: data.name,
+    protocol: data.protocol || 'snmp',
+    description: data.description || '',
+    parameters: data.parameters || [],
+    isDefault: data.isDefault || false,
+    createdAt: new Date().toISOString()
+  };
+  templates.push(newTemp);
+  writeJson(TEMPLATES_CONFIG_PATH, templates);
   return newTemp;
 }
 
 async function updateSnmpTemplate(id, data) {
-  const index = snmpTemplatesDB.findIndex(t => t.id == id);
+  let templates = readJson(TEMPLATES_CONFIG_PATH);
+  const index = templates.findIndex(t => t.id == id);
   if (index !== -1) {
-    snmpTemplatesDB[index] = { ...snmpTemplatesDB[index], ...data };
-    return snmpTemplatesDB[index];
+    templates[index] = { ...templates[index], ...data, updatedAt: new Date().toISOString() };
+    writeJson(TEMPLATES_CONFIG_PATH, templates);
+    return templates[index];
   }
   return null;
 }
 
 async function deleteSnmpTemplate(id) {
-  snmpTemplatesDB = snmpTemplatesDB.filter(t => t.id != id);
+  let templates = readJson(TEMPLATES_CONFIG_PATH);
+  const newList = templates.filter(t => t.id != id);
+  writeJson(TEMPLATES_CONFIG_PATH, newList);
   return true;
+}
+
+// --- USERS ---
+async function getAllUsers() {
+  return readJson(USERS_CONFIG_PATH);
+}
+
+async function getUserByUsername(username) {
+  const users = readJson(USERS_CONFIG_PATH);
+  return users.find(u => u.username === username) || null;
+}
+
+async function getUserById(id) {
+  const users = readJson(USERS_CONFIG_PATH);
+  return users.find(u => u.id == id) || null;
+}
+
+async function createUser(data) {
+  let users = readJson(USERS_CONFIG_PATH);
+  const newUser = { ...data, id: Date.now() };
+  users.push(newUser);
+  writeJson(USERS_CONFIG_PATH, users);
+  return newUser;
 }
 
 // --- CATEGORIES ---
@@ -364,5 +419,10 @@ module.exports = {
   getAdsbAircraftByIcao,
   // Surveillance Logs
   createSurveillanceLog,
-  getSurveillanceLogs
+  getSurveillanceLogs,
+  // Users
+  getAllUsers,
+  getUserByUsername,
+  getUserById,
+  createUser
 };
