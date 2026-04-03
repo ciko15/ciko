@@ -27,26 +27,24 @@ class EquipmentService {
             const airport = await this.db.getAirportById(equipment.airportId);
             equipment.airport = airport;
 
+            // Resolve Components (IPs) - NEW
+            equipment.components = await this.db.getOtenticationByEquipment(equipmentId);
+
+            // Resolve Limitations - NEW
+            equipment.limitations = await this.db.getLimitationsByEquipment(equipmentId);
+
             // Resolve Connection & Template
-            // Note: In JSON mode, connection details and parser_config are often part of the equipment object itself
-            // or referenced by a templateId.
             if (equipment.templateId) {
-                const template = await this.db.getSnmpTemplateById(equipment.templateId);
-                if (template) {
-                    equipment.template_name = template.name;
-                    equipment.template_parser_config = template.parameters;
-                    // Automatically enable connection if it has a template and host
-                    equipment.connect_enabled = equipment.isActive;
-                    equipment.connection_type = template.protocol || 'snmp';
-                    equipment.protocol = template.protocol || 'snmp';
-                    equipment.parser_config = template.parameters;
+                const config = await this.db.getParsingConfigById(equipment.templateId);
+                if (config) {
+                    equipment.template_name = config.name;
+                    equipment.parser_file = config.files;
                 }
             }
 
-            // Legacy field mapping for compatibility with old collector logic
-            equipment.host = equipment.ip || equipment.snmpIP || equipment.host;
-            equipment.port = equipment.port || equipment.snmpPort || 161;
-            equipment.connect_enabled = equipment.connect_enabled !== undefined ? equipment.connect_enabled : true;
+            // Legacy field mapping for compatibility
+            equipment.host = equipment.ip || equipment.snmpIP || equipment.host || (equipment.components && equipment.components.length > 0 ? equipment.components[0].ip_address : null);
+            equipment.port = equipment.port || 161;
 
             return equipment;
         } catch (error) {
@@ -100,15 +98,22 @@ class EquipmentService {
      */
     async getTemplates(equipmentType = null) {
         try {
-            const templates = await this.db.getAllSnmpTemplates();
+            const templates = await this.db.getAllParsingConfigs();
             if (equipmentType) {
-                return templates.filter(t => t.category === equipmentType || t.equipment_type === equipmentType);
+                return templates.filter(t => t.category === equipmentType);
             }
             return templates;
         } catch (error) {
             console.error('[EquipmentService] Error getting templates:', error);
             return [];
         }
+    }
+
+    /**
+     * Get sub categories
+     */
+    async getSubCategories(category) {
+        return await this.db.getSupCategoriesByCategory(category);
     }
 
     /**

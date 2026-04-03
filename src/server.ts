@@ -31,6 +31,7 @@ function authenticate(app: any) {
 // Import services and managers
 const db = require('../db/database');
 const EquipmentService = require('./services/equipment');
+const equipmentService = new EquipmentService(db);
 const DataCollectorScheduler = require('./scheduler/collector');
 const connectionManager = require('./connection/manager');
 const thresholdEvaluator = require('./utils/thresholdEvaluator');
@@ -287,24 +288,24 @@ const app = new Elysia()
                 });
             }
             
-            const categories: any = {
+            const cats: any = {
                 Communication: 0, Navigation: 0, Surveillance: 0, 'Data Processing': 0, Support: 0
             };
             if (stats && Array.isArray(stats.categories)) {
                 stats.categories.forEach((row: any) => {
-                    if (categories[row.category] !== undefined) {
-                        categories[row.category] = parseInt(row.count);
+                    if (cats[row.category] !== undefined) {
+                        cats[row.category] = parseInt(row.count);
                     }
                 });
             }
             
             return {
                 total: stats?.total || 0,
-                normal,
-                warning,
-                alert,
-                disconnect,
-                byCategory: categories
+                normal: stats.statuses.find((s:any) => s.status === 'Normal')?.count || 0,
+                warning: stats.statuses.find((s:any) => s.status === 'Warning')?.count || 0,
+                alert: stats.statuses.find((s:any) => s.status === 'Alert')?.count || 0,
+                disconnect: stats.statuses.find((s:any) => s.status === 'Disconnect')?.count || 0,
+                byCategory: cats
             };
         } catch (error: any) {
             console.error('[API] Error fetching equipment stats:', error);
@@ -339,27 +340,18 @@ const app = new Elysia()
 
     .get('/health', () => ({ status: 'ok', runtime: 'Bun', framework: 'Elysia' }))
 
-    // --- PUBLIC SNMP ROUTES ---
-    .get('/api/snmp/templates', async () => {
-        const templates = await db.getAllSnmpTemplates();
-        // Add built-in templates
-        const builtins = [
-            { id: 'dvor_maru_220', name: 'DVOR MARU 220', isDefault: true },
-            { id: 'dme_maru_310_320', name: 'DME MARU 310/320', isDefault: true }
-        ];
-        builtins.forEach(b => {
-            if (!templates.find((t: any) => t.id === b.id)) templates.push(b);
-        });
-        return templates;
-    }, { beforeHandle: () => {} })
-    .get('/api/snmp/templates/:id', async ({ params, set }) => {
-        const template = await db.getSnmpTemplateById(params.id);
-        if (!template) {
+    // --- PUBLIC PARSING CONFIG ROUTES ---
+    .get('/api/parsing-configs', async () => await db.getAllParsingConfigs())
+    .get('/api/parsing-configs/:id', async ({ params, set }) => {
+        const config = await db.getParsingConfigById(params.id);
+        if (!config) {
             set.status = 404;
-            return { message: 'Template not found' };
+            return { message: 'Config not found' };
         }
-        return template;
-    }, { beforeHandle: () => {} })
+        return config;
+    })
+    // Legacy mapping
+    .get('/api/snmp/templates', async () => await db.getAllParsingConfigs())
 
     // --- PUBLIC PING TOOL ---
     .group('/api/ping', (app) => 
@@ -510,7 +502,7 @@ const app = new Elysia()
             // Individual Equipment
             .get('/:id', async ({ params, set }) => {
                 try {
-                    const item = await db.getEquipmentById(params.id);
+                    const item = await equipmentService.getEquipmentWithConfig(params.id);
                     if (!item) {
                         set.status = 404;
                         return { message: 'Equipment not found' };
@@ -615,57 +607,25 @@ const app = new Elysia()
             })
     )
 
-    // --- EQUIPMENT TEMPLATE ROUTES ---
-    .group('/api/templates', (app) => {
-        console.log('[DEBUG-ROUTER] Mounting /api/templates group');
-        return app
-            .get('', async () => await templateService.getAllTemplates())
-            .get('/', async () => await templateService.getAllTemplates())
-            .get('/:id', async ({ params, set }) => {
-            const template = await templateService.getTemplateById(params.id);
-            if (!template) {
-                set.status = 404;
-                return { message: 'Template not found' };
-            }
-            return template;
-        })
-        .post('/', async ({ body, set }) => {
-            try {
-                return await templateService.createTemplate(body as any);
-            } catch (error: any) {
-                set.status = 500;
-                return { message: error.message };
-            }
-        }, { beforeHandle: authorize(['admin', 'user_pusat', 'teknisi_cabang']) })
-        .put('/:id', async ({ params, body, set }) => {
-            try {
-                const updated = await templateService.updateTemplate(params.id, body as any);
-                if (!updated) {
-                    set.status = 404;
-                    return { message: 'Template not found' };
-                }
-                return updated;
-            } catch (error: any) {
-                set.status = 500;
-                return { message: error.message };
-            }
-        }, { beforeHandle: authorize(['admin', 'user_pusat', 'teknisi_cabang']) })
-        .delete('/:id', async ({ params, set }) => {
-            try {
-                const success = await templateService.deleteTemplate(params.id);
-                if (!success) {
-                    set.status = 404;
-                    return { message: 'Template not found' };
-                }
-                return { message: 'Template deleted' };
-            } catch (error: any) {
-                set.status = 500;
-                return { message: error.message };
-            }
-        }, { beforeHandle: authorize(['admin', 'user_pusat']) })
-    })
-    // Alias for compatibility - removed redundant snmp/templates after consolidation
-    .get('/api/snmp/templates', async () => await templateService.getAllTemplates())
+    // --- SUP CATEGORY ROUTES ---
+    .group('/api/sup-categories', (app) => 
+        app.get('/', async () => await db.getAllSupCategories())
+           .get('/:category', async ({ params }) => await db.getSupCategoriesByCategory(params.category))
+           .put('/:category', async ({ params, body }) => await db.updateSupCategory(params.category, (body as any).sub_categories))
+    )
+
+    // --- EQUIPMENT OTENTICATION ROUTES ---
+    .group('/api/otentication', (app) =>
+        app.get('/:equipmentId', async ({ params }) => await db.getOtenticationByEquipment(params.equipmentId))
+           .post('/', async ({ body }) => await db.createOtentication(body as any))
+           .delete('/:equipmentId', async ({ params }) => await db.deleteOtenticationByEquipment(params.equipmentId))
+    )
+
+    // --- LIMITATION CONFIG ROUTES ---
+    .group('/api/limitations', (app) =>
+        app.get('/:equipmentId', async ({ params }) => await db.getLimitationsByEquipment(params.equipmentId))
+           .put('/', async ({ body }) => await db.updateLimitation(body as any))
+    )
 
     // --- AIRPORT ROUTES ---
     .group('/api/airports', (app) =>
@@ -747,10 +707,19 @@ const app = new Elysia()
     // --- BRANCH ROUTES ---
     .get('/api/branches', async () => await db.getAllAirports())
 
-    // --- SNMP ROUTES ---
-    .group('/api/snmp', (app) =>
+    // --- SNMP TEMPLATE ROUTES (MAIN) ---
+    .group('/api/templates', (app) =>
         app
-            .post('/templates', async ({ body, set }) => {
+            .get('/', async () => await db.getAllSnmpTemplates())
+            .get('/:id', async ({ params, set }) => {
+                const item = await db.getSnmpTemplateById(params.id);
+                if (!item) {
+                    set.status = 404;
+                    return { message: 'Template not found' };
+                }
+                return item;
+            })
+            .post('/', async ({ body, set }) => {
                 try {
                     const id = 'custom_' + Date.now();
                     const newTemplate = await db.createSnmpTemplate({ ...(body as any), id, isDefault: false });
@@ -761,7 +730,7 @@ const app = new Elysia()
                     return { message: error.message };
                 }
             }, { beforeHandle: authorize(['admin', 'user_pusat']) })
-            .put('/templates/:id', async ({ params, body, set }) => {
+            .put('/:id', async ({ params, body, set }) => {
                 const updated = await db.updateSnmpTemplate(params.id, body);
                 if (!updated) {
                     set.status = 404;
@@ -769,7 +738,7 @@ const app = new Elysia()
                 }
                 return updated;
             }, { beforeHandle: authorize(['admin', 'user_pusat']) })
-            .delete('/templates/:id', async ({ params, set }) => {
+            .delete('/:id', async ({ params, set }) => {
                 const deleted = await db.deleteSnmpTemplate(params.id);
                 if (!deleted) {
                     set.status = 404;
@@ -777,6 +746,11 @@ const app = new Elysia()
                 }
                 return { message: 'Template deleted' };
             }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+    )
+
+    // --- SNMP TEST ROUTES (BACKWARD COMPATIBILITY) ---
+    .group('/api/snmp', (app) =>
+        app
             .post('/test', async ({ body, set }) => {
                 const { snmpGet } = require('./utils/network');
                 const { ip, port, community, oid } = body as any;
@@ -791,7 +765,7 @@ const app = new Elysia()
             .get('/data/:id', async ({ params, set }) => {
                 const { fetchAndParseData } = require('./utils/network');
                 try {
-                    const item = await db.getEquipmentById(params.id);
+                    const item = await equipmentService.getEquipmentWithConfig(params.id);
                     if (!item) {
                         set.status = 404;
                         return { message: 'Equipment not found' };

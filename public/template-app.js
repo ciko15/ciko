@@ -4,7 +4,7 @@
  * Updated for JSON Storage Integration
  */
 
-var authToken = localStorage.getItem('authToken');
+authToken = localStorage.getItem('authToken');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {

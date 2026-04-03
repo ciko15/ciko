@@ -105,48 +105,83 @@ function initMap() {
 
 // Global "Pick Location" logic
 window.enableMapPick = function(type) {
-  window.activeMapPicker = type;
-  document.getElementById('mapPickerModal').classList.remove('hidden');
+  // ... (original content)
+};
+
+// --- NEW ISSUE #10 FUNCTIONS ---
+let supCategoriesData = [];
+
+async function loadSupCategories() {
+  try {
+    const res = await fetch(`${API_URL}/sup-categories`);
+    supCategoriesData = await res.json();
+  } catch (err) { console.error('Error loading sup categories:', err); }
+}
+
+window.handleCategoryChange = function(category) {
+  const select = document.getElementById('equipmentSupCategory');
+  if (!select) return;
   
-  // Initialize map if not already done
-  if (!pickerMap) {
-    const sentaniCoords = [-2.5768, 140.5163];
-    pickerMap = L.map('mapPickerContainer').setView(sentaniCoords, 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(pickerMap);
-    
-    pickerMap.on('click', (e) => {
-      const { lat, lng } = e.latlng;
-      if (pickerMarker) {
-        pickerMarker.setLatLng(e.latlng);
-      } else {
-        pickerMarker = L.marker(e.latlng, { draggable: true }).addTo(pickerMap);
-        pickerMarker.on('dragend', () => {
-          const pos = pickerMarker.getLatLng();
-          document.getElementById('pickedCoordsText').textContent = `${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`;
-        });
-      }
-      document.getElementById('pickedCoordsText').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      document.getElementById('confirmLocationBtn').disabled = false;
+  select.innerHTML = '<option value="">Select Sub Category</option>';
+  
+  const group = supCategoriesData.find(c => c.category === category);
+  if (group && group.sub_categories) {
+    group.sub_categories.forEach(sub => {
+      const opt = document.createElement('option');
+      opt.value = sub;
+      opt.textContent = sub;
+      select.appendChild(opt);
     });
   }
+};
+
+window.addNewSupCategory = async function() {
+  const category = document.getElementById('equipmentCategory').value;
+  if (!category) {
+    alert('Please select a main category first');
+    return;
+  }
   
-  // Ensure map is correctly sized when modal opens
-  setTimeout(() => {
-    pickerMap.invalidateSize();
-    // Center at current values if they exist
-    const latInput = document.getElementById(type === 'equipment' ? 'equipmentLat' : 'airportLat');
-    const lngInput = document.getElementById(type === 'equipment' ? 'equipmentLng' : 'airportLng');
-    if (latInput?.value && lngInput?.value) {
-      const currentPos = [parseFloat(latInput.value), parseFloat(lngInput.value)];
-      if (!isNaN(currentPos[0]) && !isNaN(currentPos[1]) && currentPos[0] !== 0) {
-        pickerMap.setView(currentPos, 15);
-        if (pickerMarker) pickerMarker.setLatLng(currentPos);
-        else pickerMarker = L.marker(currentPos, { draggable: true }).addTo(pickerMap);
-        document.getElementById('pickedCoordsText').textContent = `${currentPos[0].toFixed(6)}, ${currentPos[1].toFixed(6)}`;
-        document.getElementById('confirmLocationBtn').disabled = false;
-      }
-    }
-  }, 300);
+  const newSub = prompt(`Add new sub-category for ${category}:`);
+  if (!newSub) return;
+  
+  const group = supCategoriesData.find(c => c.category === category) || { category, sub_categories: [] };
+  if (!group.sub_categories.includes(newSub)) {
+    group.sub_categories.push(newSub);
+    try {
+      await fetch(`${API_URL}/sup-categories/${category}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ sub_categories: group.sub_categories })
+      });
+      await loadSupCategories();
+      handleCategoryChange(category);
+      document.getElementById('equipmentSupCategory').value = newSub;
+    } catch (err) { console.error('Error saving sub category:', err); }
+  }
+};
+
+window.addIpComponentRow = function(data = { name: '', ip_address: '' }) {
+  const container = document.getElementById('ipComponentsContainer');
+  const rowId = `ip-row-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  
+  const div = document.createElement('div');
+  div.className = 'form-row ip-component-row';
+  div.id = rowId;
+  div.innerHTML = `
+    <div class="form-group" style="flex: 2;">
+      <input type="text" class="comp-name" placeholder="Name (e.g. TX 1)" value="${data.name}">
+    </div>
+    <div class="form-group" style="flex: 2;">
+      <input type="text" class="comp-ip" placeholder="IP Address" value="${data.ip_address}">
+    </div>
+    <div class="form-group" style="flex: 0; align-self: flex-end; margin-bottom: 15px;">
+      <button type="button" class="btn btn-icon delete" onclick="document.getElementById('${rowId}').remove()">
+        <i class="fas fa-minus"></i>
+      </button>
+    </div>
+  `;
+  container.appendChild(div);
 };
 
 async function loadEquipmentMarkers() {
@@ -239,19 +274,20 @@ function renderEquipmentTable(data) {
   if (!tbody) return;
   
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No equipment available</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No equipment available</td></tr>';
     return;
   }
   
   tbody.innerHTML = data.map(item => `
     <tr>
-      <td style="text-align: center;"><span class="status-dot ${item.status.toLowerCase()}"></span></td>
+      <td style="text-align: center;"><span class="status-dot ${(item.status_ops || item.status || 'Normal').toLowerCase()}"></span></td>
       <td style="text-align: center;">${item.name}</td>
-      <td style="text-align: center;">${item.category}</td>
-      <td style="text-align: center; display: none;">${airportsData.find(a => a.id == item.airportId)?.name || 'N/A'}</td>
-      <td style="text-align: center;"><span class="status-badge ${item.status}">${item.status}</span></td>
+      <td style="text-align: center;">${item.category} (${item.sup_category || '-'})</td>
+      <td style="text-align: center;">${item.merk || '-'} / ${item.type || '-'}</td>
+      <td style="text-align: center;"><span class="status-badge ${item.status_ops || item.status || 'Normal'}">${item.status_ops || item.status || 'Normal'}</span></td>
       <td style="text-align: center;">${item.lat}, ${item.lng}</td>
       <td style="text-align: center;">
+        <button class="btn btn-icon" onclick="viewEquipmentDetail(${item.id})"><i class="fas fa-eye"></i></button>
         <button class="btn btn-icon" onclick="editEquipment(${item.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-icon delete" onclick="deleteEquipment(${item.id})"><i class="fas fa-trash"></i></button>
       </td>
@@ -269,11 +305,16 @@ async function handleEquipmentSubmit(e) {
     name: document.getElementById('equipmentName').value,
     code: document.getElementById('equipmentCode').value,
     category: document.getElementById('equipmentCategory').value,
-    airportId: document.getElementById('equipmentAirport').value,
+    sup_category: document.getElementById('equipmentSupCategory').value,
+    merk: document.getElementById('equipmentMerk').value,
+    type: document.getElementById('equipmentType').value,
     status: document.getElementById('equipmentStatus').value,
+    status_ops: document.getElementById('equipmentStatusOps').value,
+    airportId: document.getElementById('equipmentAirport').value,
     lat: latVal ? parseFloat(latVal) : null,
     lng: lngVal ? parseFloat(lngVal) : null,
-    description: document.getElementById('equipmentDescription').value
+    description: document.getElementById('equipmentDescription').value,
+    isActive: document.getElementById('equipmentActive').checked
   };
   
   try {
@@ -286,6 +327,41 @@ async function handleEquipmentSubmit(e) {
     });
     
     if (res.ok) {
+      const savedEquip = await res.json();
+      const currentId = id || savedEquip.id;
+      
+      // Save IP Components
+      const ipRows = document.querySelectorAll('.ip-component-row');
+      await fetch(`${API_URL}/otentication/${currentId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      for (const row of ipRows) {
+        const name = row.querySelector('.comp-name').value;
+        const ip = row.querySelector('.comp-ip').value;
+        if (name && ip) {
+          await fetch(`${API_URL}/otentication`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name, ip_address: ip, equipt_id: currentId })
+          });
+        }
+      }
+      
+      // Save Limitations
+      const limitData = {
+        equipt_id: currentId,
+        name: data.name,
+        category: data.category,
+        value: document.getElementById('limitValue').value,
+        wlv: document.getElementById('limitWlv').value,
+        alv: document.getElementById('limitAlv').value,
+        whv: document.getElementById('limitWhv').value,
+        ahv: document.getElementById('limitAhv').value
+      };
+      await fetch(`${API_URL}/limitations`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(limitData)
+      });
+
       document.getElementById('equipmentModal').classList.add('hidden');
       loadEquipment();
       loadStats();
@@ -294,23 +370,114 @@ async function handleEquipmentSubmit(e) {
   } catch (err) { console.error('Form submit error:', err); }
 }
 
-window.editEquipment = function(id) {
+window.editEquipment = async function(id) {
   const item = equipmentData.find(e => e.id == id);
   if (!item) return;
+  
+  document.getElementById('equipmentForm').reset();
+  document.getElementById('ipComponentsContainer').innerHTML = '';
   
   document.getElementById('equipmentId').value = item.id;
   document.getElementById('equipmentName').value = item.name;
   document.getElementById('equipmentCode').value = item.code || '';
   document.getElementById('equipmentCategory').value = item.category;
-  document.getElementById('equipmentAirport').value = item.airportId;
-  document.getElementById('equipmentStatus').value = item.status;
+  handleCategoryChange(item.category);
+  document.getElementById('equipmentSupCategory').value = item.sup_category || '';
+  document.getElementById('equipmentMerk').value = item.merk || '';
+  document.getElementById('equipmentType').value = item.type || '';
+  document.getElementById('equipmentAirport').value = item.airportId || '';
+  document.getElementById('equipmentStatus').value = item.status || 'Active';
+  document.getElementById('equipmentStatusOps').value = item.status_ops || 'Normal';
   document.getElementById('equipmentLat').value = item.lat || '';
   document.getElementById('equipmentLng').value = item.lng || '';
   document.getElementById('equipmentDescription').value = item.description || '';
+  document.getElementById('equipmentActive').checked = item.isActive !== false;
+  
+  // Load IP Components
+  try {
+    const res = await fetch(`${API_URL}/otentication/${id}`);
+    const components = await res.json();
+    components.forEach(c => addIpComponentRow(c));
+  } catch (err) { console.error('Error loading components:', err); }
+  
+  // Load Limitations
+  try {
+    const res = await fetch(`${API_URL}/limitations/${id}`);
+    const limit = await res.json();
+    if (limit && !limit.error) {
+      document.getElementById('limitValue').value = limit.value || '';
+      document.getElementById('limitWlv').value = limit.wlv || '';
+      document.getElementById('limitAlv').value = limit.alv || '';
+      document.getElementById('limitWhv').value = limit.whv || '';
+      document.getElementById('limitAhv').value = limit.ahv || '';
+    }
+  } catch (err) { console.error('Error loading limitations:', err); }
   
   document.getElementById('modalFormTitle').textContent = 'Edit Equipment';
   document.getElementById('equipmentModal').classList.remove('hidden');
 }
+
+window.viewEquipmentDetail = async function(id) {
+  const item = equipmentData.find(e => e.id == id);
+  if (!item) return;
+  
+  const content = document.getElementById('equipmentDetailContent');
+  content.innerHTML = '<div class="loading-spinner">Loading details...</div>';
+  document.getElementById('equipmentDetailModal').classList.remove('hidden');
+  
+  try {
+    const [authRes, limitRes] = await Promise.all([
+      fetch(`${API_URL}/otentication/${id}`),
+      fetch(`${API_URL}/limitations/${id}`)
+    ]);
+    const components = await authRes.json();
+    const limit = await limitRes.json();
+    
+    content.innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-card">
+          <h4>General Information</h4>
+          <p><strong>Name:</strong> ${item.name}</p>
+          <p><strong>Category:</strong> ${item.category} / ${item.sup_category || '-'}</p>
+          <p><strong>Brand/Type:</strong> ${item.merk || '-'} / ${item.type || '-'}</p>
+          <p><strong>Status Operasional:</strong> <span class="status-badge ${item.status_ops || item.status}">${item.status_ops || item.status}</span></p>
+          <p><strong>Coordinate:</strong> ${item.lat}, ${item.lng}</p>
+          <p><strong>Keterangan:</strong> ${item.description || '-'}</p>
+        </div>
+        <div class="detail-card">
+          <h4>IP Components (Otentication)</h4>
+          ${components.length > 0 ? `
+            <table class="data-table">
+              <thead><tr><th>Component</th><th>IP Address</th></tr></thead>
+              <tbody>${components.map(c => `<tr><td>${c.name}</td><td>${c.ip_address}</td></tr>`).join('')}</tbody>
+            </table>
+          ` : '<p>No IP components configured</p>'}
+        </div>
+        <div class="detail-card full-width">
+          <h4>Threshold Limitations</h4>
+          ${limit && !limit.error ? `
+            <table class="data-table">
+              <thead>
+                <tr><th>Value</th><th>WLV</th><th>ALV</th><th>WHV</th><th>AHV</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${limit.value || '0'}</td>
+                  <td class="status-warning">${limit.wlv || '-'}</td>
+                  <td class="status-error">${limit.alv || '-'}</td>
+                  <td class="status-warning">${limit.whv || '-'}</td>
+                  <td class="status-error">${limit.ahv || '-'}</td>
+                </tr>
+              </tbody>
+            </table>
+          ` : '<p>No specific limitations configured</p>'}
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    content.innerHTML = '<p class="status-error">Failed to load detail data</p>';
+  }
+};
 
 async function deleteEquipment(id) {
   if (!confirm('Are you sure?')) return;
@@ -474,6 +641,10 @@ function initNavigation() {
     if (target) {
       target.classList.remove('hidden');
       if (sectionId === 'dashboard' && window.map) setTimeout(() => window.map.invalidateSize(), 200);
+      if (sectionId === 'templates' && typeof window.initConfigurationNav === 'function') {
+        window.initConfigurationNav();
+        window.setActiveConfig('snmp-templates');
+      }
     }
     
     localStorage.setItem('currentSection', sectionId);
@@ -496,11 +667,12 @@ function initNavigation() {
 }
 
 // Init
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   initMap();
   initNavigation();
   updateAuthUI();
+  await loadSupCategories();
   loadStats();
   loadAirports();
   loadEquipment();
