@@ -599,6 +599,52 @@ body {
   color: #2563eb;
 }
 
+/* Sidebar Login Form */
+.sidebar-login-container {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: all var(--transition-speed);
+}
+
+.sidebar-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-auth-group input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  transition: all var(--transition-speed);
+}
+
+.sidebar-auth-group input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.btn-small {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.hidden-initial {
+  display: none !important;
+}
+
+.hidden {
+  display: none !important;
+}
+
 /* Sidebar Logout Button */
 .sidebar-logout-btn {
   width: 100%;

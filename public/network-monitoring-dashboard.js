@@ -1,7 +1,7 @@
 // Network Monitoring Dashboard
 // Real-time network statistics and connectivity monitoring
 
-var API_URL = window.API_URL || '/api';
+
 var liveDataTimer = window.liveDataTimer;
 let networkStats = [];
 let interfaceData = [];

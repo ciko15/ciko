@@ -1,5 +1,5 @@
 // Configuration Navigation Handler with State Management
-var API_URL = window.API_URL || '/api';
+
 var liveDataTimer = window.liveDataTimer;
 
 // State to track active sub-menu
@@ -36,6 +36,7 @@ function initConfigurationNav() {
       
       // Show only the corresponding content based on configType
       switch(configType) {
+        case 'equipment-templates':
         case 'snmp-templates':
           document.getElementById('configSnmpTemplatesContent')?.classList.remove('hidden');
           // Also handle Alt version if exists
@@ -130,6 +131,7 @@ function setActiveConfig(configType) {
   
   // Show corresponding content
   switch(configType) {
+    case 'equipment-templates':
     case 'snmp-templates':
       document.getElementById('configSnmpTemplatesContent')?.classList.remove('hidden');
       document.getElementById('configSnmpTemplatesContentAlt')?.classList.remove('hidden');

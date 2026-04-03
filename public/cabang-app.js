@@ -7,9 +7,7 @@
  * - Selecting on the right side a branch shows equipment
  * - Filtering by category works dynamically
  * - Clickable equipment cards with detail panel
- * - Auto-refresh every 15 seconds
  */
-var API_URL = window.API_URL || '/api';
 var liveDataTimer = window.liveDataTimer;
 
 const cabangModule = (function() {

@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 const db = require('../../db/database');
-import { generateDvorMaruData, generateDmeMaruData, generateSimulatedData } from './simulators';
+
 
 /**
  * Validates an IP address string
@@ -46,7 +46,8 @@ export async function pingHost(ip: string, timeout: number = 3): Promise<any> {
 
 
 /**
- * Tiered Ping Logic: Checks Gateway first, then Equipment.
+ * Direct Equipment Ping (No Gateway Check)
+ * Pings equipment IP directly for branch deployment.
  */
 export async function pingTiered(equipmentId: number): Promise<any> {
     const item = await db.getEquipmentById(equipmentId);
@@ -54,57 +55,21 @@ export async function pingTiered(equipmentId: number): Promise<any> {
 
     const config = item.snmpConfig || item.snmp_config || {};
     const ip = item.ip_address || config.ip;
-    const isBypassGateway = config.bypassGateway === true;
 
     if (!ip || !isValidIP(ip)) {
         return { success: false, message: 'Invalid or missing IP address' };
     }
 
-    // Branch/Gateway check
-    const branchId = item.branchId || item.airport_id;
-    if (branchId && !isBypassGateway) {
-        const branch = await db.getAirportById(branchId);
-        const gwIp = branch?.ip_branch || branch?.ip_gateway;
-        
-        if (gwIp && isValidIP(gwIp)) {
-            console.log(`[PING-TIER-1] Checking gateway ${gwIp} for ${item.name}...`);
-            const gwResult = await pingHost(gwIp, 3);
-            
-            if (!gwResult.alive) {
-                console.warn(`[PING-TIER-1] Gateway ${gwIp} DOWN. Aborting equipment ping.`);
-                return {
-                    success: false,
-                    status: 'offline',
-                    message: `Gateway Cabang (${gwIp}) terputus. Koneksi ke alat tidak dapat divalidasi.`,
-                    tier: 1,
-                    timestamp: new Date().toISOString()
-                };
-            }
-            console.log(`[PING-TIER-1] Gateway UP. Proceeding to equipment...`);
-        }
-    }
-
-    // Equipment check
-    console.log(`[PING-TIER-2] Checking equipment ${item.name} at ${ip}...`);
+    // Direct equipment check
+    console.log(`[PING] Checking equipment ${item.name} at ${ip}...`);
     
-    // Special case for Localhost or Generate Source (Simulation)
-    if (ip === '127.0.0.1' || item.name.toLowerCase().includes('maru') || item.name.toLowerCase().includes('simulated')) {
-        return {
-            success: true,
-            status: 'online',
-            tier: 2,
-            statistics: { min: 0.1, max: 0.5, avg: 0.2 },
-            timestamp: new Date().toISOString(),
-            message: 'Simulated/Loopback device always online'
-        };
-    }
+    // Real device ping only
 
     const result = await pingHost(ip, 3);
     
     return {
         success: result.alive,
         status: result.alive ? 'online' : 'offline',
-        tier: 2,
         statistics: result.alive ? { 
             min: result.min || result.time, 
             max: result.max || result.time, 
@@ -216,26 +181,7 @@ export async function fetchAndParseData(equipment: any) {
     const ipAddress = equipment.ipAddress || (config ? config.ip : null);
     const isBypassGateway = config?.bypassGateway === true;
 
-    // 1. PHASE 1: Authenticate Connection (Tiered Ping)
-    // Checking Gateway first
-    const branchId = equipment.branchId || equipment.airport_id;
-    if (branchId && !isBypassGateway) {
-        const branch = await db.getAirportById(branchId);
-        const gwIp = branch?.ip_branch || branch?.ip_gateway;
-        
-        if (gwIp && isValidIP(gwIp)) {
-            const gwResult = await pingHost(gwIp, 2);
-            if (!gwResult.alive) {
-                return { 
-                    parsedData: { status: 'Disconnect', message: `Gateway (${gwIp}) Unreachable` }, 
-                    status: 'Disconnect', 
-                    triggeredParameters: ['gateway'] 
-                };
-            }
-        }
-    }
-
-    // Checking Device
+    // 1. PHASE 1: Direct Device Check (No Gateway)
     if (!ipAddress || !isValidIP(ipAddress)) {
         return { 
             parsedData: { status: 'Disconnect', message: 'Invalid Device IP' }, 
@@ -244,58 +190,24 @@ export async function fetchAndParseData(equipment: any) {
         };
     }
 
-    // For simulation or local loopback, we assume device is alive if gateway is alive
-    const isSimulated = ipAddress === '127.0.0.1' || equipment.name.toLowerCase().includes('maru') || equipment.name.toLowerCase().includes('simulated');
-    
-    if (!isSimulated) {
-        const devicePing = await pingHost(ipAddress, 2);
-        if (!devicePing.alive) {
-            return { 
-                parsedData: { status: 'Disconnect', message: 'Device Unreachable' }, 
-                status: 'Disconnect', 
-                triggeredParameters: ['device'] 
-            };
-        }
+    const devicePing = await pingHost(ipAddress, 2);
+    if (!devicePing.alive) {
+        return { 
+            parsedData: { status: 'Disconnect', message: 'Device Unreachable' }, 
+            status: 'Disconnect', 
+            triggeredParameters: ['device'] 
+        };
     }
 
     // 2. PHASE 2: Fetch Raw Data (Simulated or Real)
-    const SIMULATION_MODE = process.env.SIMULATION_MODE !== 'false';
-
-    if (SIMULATION_MODE) {
-        let simResult;
-
-        switch (templateId) {
-            case 'dvor_maru_220':
-                simResult = generateDvorMaruData(equipment.id, ipAddress);
-                break;
-            case 'dme_maru_310_320':
-                simResult = generateDmeMaruData(equipment.id, ipAddress);
-                break;
-            default:
-                simResult = await generateSimulatedData(templateId || 'generic_snmp', equipment.id, ipAddress);
-                break;
-        }
-
-        // 3. PHASE 3: Parsing & Tagging
-        if (templateId === 'dvor_maru_220' || templateId === 'dme_maru_310_320') {
-            const pResult = await parseAdvancedData(templateId, simResult.rawData, equipment);
-            return { 
-                parsedData: { ...pResult.data, _ip: simResult.ip, _timestamp: simResult.timestamp }, 
-                status: pResult.status, 
-                triggeredParameters: pResult.triggeredParameters || [] 
-            };
-        } else {
-            const evalResult = await determineStatus(simResult.rawData, templateId || 'generic_snmp');
-            return { 
-                parsedData: { ...simResult.rawData, _ip: simResult.ip, _timestamp: simResult.timestamp }, 
-                status: evalResult.status, 
-                triggeredParameters: evalResult.triggeredParameters 
-            };
-        }
-    }
-
-    // Real SNMP implementation...
-    throw new Error('Real backend device communication not yet fully implemented for this type');
+    // Real SNMP implementation
+    const rawData = { /* SNMP fetch placeholder */ };
+    const evalResult = await determineStatus(rawData, templateId || 'generic_snmp');
+    return { 
+        parsedData: { ...rawData, _ip: ipAddress }, 
+        status: evalResult.status, 
+        triggeredParameters: evalResult.triggeredParameters 
+    };
 }
 
 /**

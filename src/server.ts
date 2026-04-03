@@ -1,7 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { staticPlugin } from '@elysiajs/static';
-import { jwt } from '@elysiajs/jwt';
 import { serverTiming } from '@elysiajs/server-timing';
 
 import ping from 'ping';
@@ -215,9 +214,11 @@ const app = new Elysia()
         const auth = request.headers.get('authorization');
         if (auth && auth.startsWith('Bearer ')) {
             const token = auth.substring(7);
-            // Handle static development token
+            // Handle static development token with embedded role
             if (token.startsWith('static-token-')) {
-                return { user: { role: 'admin', username: 'Admin' } };
+                const parts = token.split('-');
+                const role = parts[2] || 'admin';
+                return { user: { role, username: 'Admin' } };
             }
             // Future: Handle real JWT here
         }
@@ -237,21 +238,39 @@ const app = new Elysia()
                 error: 'Route not found in Elysia'
             };
         }
-        console.error(`[SERVER-ERROR] ${code}:`, error);
+        
+        // Detailed logging for debugging
+        const err = error as any;
+        console.error(`[SERVER-ERROR] ${code} (${err.name || 'Unknown Error'}): ${err.message}`);
+        if (err.stack) console.error(err.stack);
+        
         if (!set.status || set.status === 200) set.status = 500;
-        return { success: false, message: (error as any).message || 'Internal Server Error' };
+        return { 
+            success: false, 
+            message: err.message || 'Internal Server Error',
+            type: err.name || code
+        };
     })
 
-    // --- MIDDLEWARE & PLUGINS ---
-    .use(staticPlugin({
-        assets: 'public',
-        prefix: '/'
-    }))
-
     .state('simulationMode', true)
-    
-    // --- AUTH ---
 
+    .post('/api/login', async ({ body, set }) => {
+        const { username, password } = body as any;
+        const user = await db.getUserByUsername(username);
+        
+        if (!user || user.password !== password) {
+            set.status = 401;
+            return { success: false, message: 'Invalid username or password' };
+        }
+        
+        // In a real app, generate a JWT. Here we return a session token.
+        const token = `static-token-${user.role}-${Date.now()}`;
+        return { 
+            success: true, 
+            token, 
+            user: { username: user.username, role: user.role } 
+        };
+    })
 
     // Public Equipment Stats
     .get('/api/equipment/stats', async () => {
@@ -302,10 +321,10 @@ const app = new Elysia()
         const allEquipment = await db.getAllEquipment({ limit: 10000, isActive: 'all' });
         const equipmentData = allEquipment.data || allEquipment;
 
-        return airports.map((airport: any) => {
+        return (airports || []).map((airport: any) => {
             const airportId = airport.id;
-            const airportEquipment = equipmentData.filter((e: any) => e.airport_id === airportId || e.branch_id === airportId || e.airportId === airportId || e.branchId === airportId);
-            const activeEquipment = airportEquipment.filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1' || e.is_active === true);
+            const airportEquipment = (equipmentData || []).filter((e: any) => e.airport_id === airportId || e.branch_id === airportId || e.airportId === airportId || e.branchId === airportId);
+            const activeEquipment = (airportEquipment || []).filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1' || e.is_active === true);
             
             return {
                 ...airport,
@@ -448,8 +467,6 @@ const app = new Elysia()
                 };
             })
     )
-
-
     .group('/api/equipment', (app) =>
         app
             // Equipment List
@@ -598,6 +615,58 @@ const app = new Elysia()
             })
     )
 
+    // --- EQUIPMENT TEMPLATE ROUTES ---
+    .group('/api/templates', (app) => {
+        console.log('[DEBUG-ROUTER] Mounting /api/templates group');
+        return app
+            .get('', async () => await templateService.getAllTemplates())
+            .get('/', async () => await templateService.getAllTemplates())
+            .get('/:id', async ({ params, set }) => {
+            const template = await templateService.getTemplateById(params.id);
+            if (!template) {
+                set.status = 404;
+                return { message: 'Template not found' };
+            }
+            return template;
+        })
+        .post('/', async ({ body, set }) => {
+            try {
+                return await templateService.createTemplate(body as any);
+            } catch (error: any) {
+                set.status = 500;
+                return { message: error.message };
+            }
+        }, { beforeHandle: authorize(['admin', 'user_pusat', 'teknisi_cabang']) })
+        .put('/:id', async ({ params, body, set }) => {
+            try {
+                const updated = await templateService.updateTemplate(params.id, body as any);
+                if (!updated) {
+                    set.status = 404;
+                    return { message: 'Template not found' };
+                }
+                return updated;
+            } catch (error: any) {
+                set.status = 500;
+                return { message: error.message };
+            }
+        }, { beforeHandle: authorize(['admin', 'user_pusat', 'teknisi_cabang']) })
+        .delete('/:id', async ({ params, set }) => {
+            try {
+                const success = await templateService.deleteTemplate(params.id);
+                if (!success) {
+                    set.status = 404;
+                    return { message: 'Template not found' };
+                }
+                return { message: 'Template deleted' };
+            } catch (error: any) {
+                set.status = 500;
+                return { message: error.message };
+            }
+        }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+    })
+    // Alias for compatibility - removed redundant snmp/templates after consolidation
+    .get('/api/snmp/templates', async () => await templateService.getAllTemplates())
+
     // --- AIRPORT ROUTES ---
     .group('/api/airports', (app) =>
         app
@@ -633,10 +702,9 @@ const app = new Elysia()
                   return { success: false, error: 'airportId query parameter required' };
                 }
                 const airportIdNum = parseInt(airportId as string);
-                const airportQuery = 'SELECT id, name, ip_branch FROM airports WHERE id = ?';
-                const airports = await db.query(airportQuery, [airportIdNum]);
+                const airport = await db.getAirportById(airportIdNum);
                 
-                if (!airports || airports.length === 0) {
+                if (!airport) {
                   set.status = 404;
                   return { 
                     success: false, 
@@ -645,8 +713,7 @@ const app = new Elysia()
                   };
                 }
                 
-                const airport = airports[0];
-                const gatewayIp = airport.ip_branch;
+                const gatewayIp = airport.ipBranch || airport.ip_branch;
                 
                 if (!gatewayIp || gatewayIp.trim() === '') {
                   return { 
@@ -815,8 +882,9 @@ const app = new Elysia()
             })
             .get('/status', async () => {
                 const stations = await db.getAllSurveillanceStations({});
-                const radarStations = stations.filter((s: any) => s.type === 'radar');
-                const adsbStations = stations.filter((s: any) => s.type === 'adsb');
+                const stationList = Array.isArray(stations) ? stations : [];
+                const radarStations = stationList.filter((s: any) => s.type === 'radar');
+                const adsbStations = stationList.filter((s: any) => s.type === 'adsb');
                 
                 const radarTargets = await db.getRadarTargets(1, { limit: 1000 });
                 const adsbAircraft = await db.getAdsbAircraft({ limit: 1000 });
@@ -925,7 +993,7 @@ const app = new Elysia()
 
     // --- NETWORK MONITORING ROUTES ---
     .group('/api/network', (app) => {
-        const networkMonitor = require('./network/monitor-fixed');
+        const networkMonitor = require('./network/monitor');
         return app.use(authenticate)
             .get('/interfaces', async () => ({ success: true, data: await networkMonitor.getNetworkInterfaces() }))
             .get('/stats', async () => ({ success: true, data: await networkMonitor.getNetworkStats() }))
@@ -941,7 +1009,7 @@ const app = new Elysia()
             .get('/arp-table', async () => ({ success: true, data: await networkMonitor.getArpTable() }))
             .get('/discover-devices', async () => ({ success: true, data: await networkMonitor.discoverNetworkDevices() }))
             .get('/local-info', async () => ({ success: true, data: await networkMonitor.getLocalNetworkInfo() }))
-            .get('/device-traffic', async () => ({ success: true, data: await networkMonitor.getDeviceTraffic() }));
+            .get('/device-traffic', async () => ({ success: true, data: await networkMonitor.getDeviceTraffic() }))
     })
 
     // --- PACKET SNIFFER ROUTES ---
@@ -970,9 +1038,38 @@ const app = new Elysia()
             .post('/clear', () => {
                 packetSniffer.clear();
                 return { success: true, message: 'Packets cleared' };
-            });
+            })
     })
 
+    // Root Dashboard Serving (Direct Bun file serving via Response)
+    .get('/', async () => {
+        try {
+            const path = require('path');
+            const indexPath = path.resolve(process.cwd(), 'public', 'index.html');
+            console.log(`[DEBUG-ROUTER] Serving dashboard from: ${indexPath}`);
+            const Bun = (globalThis as any).Bun;
+            if (!Bun) throw new Error('Bun runtime not found');
+            return new Response(Bun.file(indexPath), { headers: { 'Content-Type': 'text/html' } });
+        } catch (e: any) {
+            console.error(`[DEBUG-ROUTER] Failed to serve root: ${e.message}`);
+            return new Response(`Server Dashboard Error: ${e.message}`, { status: 500 });
+        }
+    })
+    .get('/index.html', async () => {
+        const path = require('path');
+        const Bun = (globalThis as any).Bun;
+        return new Response(Bun.file(path.resolve(process.cwd(), 'public', 'index.html')), { headers: { 'Content-Type': 'text/html' } });
+    })
+    .get('/favicon.ico', () => (globalThis as any).Bun?.file('public/icon.png'))
+    .state('simulationMode', true)
+    
+    .get('/api/test-chain', () => {
+        console.log('[DEBUG-ROUTER] Hit /api/test-chain');
+        return { chain: 'complete', timestamp: new Date().toISOString() };
+    })
+    
+    // Final Static Files Fallback
+    .use(staticPlugin({ assets: 'public', prefix: '' }))
     .listen(PORT);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
@@ -986,18 +1083,19 @@ async function startServices() {
         // await seedUpsJakarta();
 
         // 2. Load SNMP Templates into cache
-        state.snmpTemplatesCache = await db.getAllSnmpTemplates();
-        console.log(`[SNMP] ${state.snmpTemplatesCache.length} templates loaded`);
+        state.snmpTemplatesCache = await templateService.getAllTemplates();
+        console.log(`[SNMP] ${state.snmpTemplatesCache.length} templates loaded from JSON`);
 
-        // 3. Start Background Schedulers (DISABLED for database-less mode)
-        // setInterval(collectEquipmentData, 60000);
-        // setInterval(collectSurveillanceData, 60000);
+        // 3. Start Background Schedulers (DISABLED)
+        // const collector = new DataCollectorScheduler(new EquipmentService(db));
+        // // Run every 2 minutes for stability
+        // setInterval(() => collector.collectAll(), 120000);
         
-        // Initial run after a short delay (DISABLED)
-        // setTimeout(collectEquipmentData, 5000);
-        // setTimeout(collectSurveillanceData, 8000);
+        // // Initial run after a short delay
+        // setTimeout(() => collector.collectAll(), 10000);
 
-        // 4. Initialize Surveillance Receivers if available
+        // 4. Initialize Surveillance Receivers if available (DISABLED)
+        /*
         if (RadarReceiver && AdsbReceiver) {
             console.log('[SURVEILLANCE] Initializing Radar and ADS-B receivers...');
             
@@ -1023,8 +1121,9 @@ async function startServices() {
             
             console.log('[SURVEILLANCE] Receivers started');
         }
+        */
 
-        console.log('[SYSTEM] All services initialized successfully');
+        console.log('[SYSTEM] Core services initialized (Background collection disabled)');
     } catch (err) {
         console.error('[SYSTEM] Error during service initialization:', err);
     }

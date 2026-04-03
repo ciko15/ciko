@@ -4,7 +4,6 @@
  */
 
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
 
 let io = null;
 
@@ -19,34 +18,15 @@ function initializeWebSocket(server) {
     pingInterval: 25000
   });
 
-  // Authentication middleware
-  io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-key-change-in-production');
-        socket.user = decoded;
-      } catch (err) {
-        // Allow connection without auth for public dashboard
-        socket.user = null;
-      }
-    }
-    next();
-  });
-
   // Connection handlers
   io.on('connection', (socket) => {
-    console.log(`[WS] Client connected: ${socket.id}, User: ${socket.user?.username || 'anonymous'}`);
+    console.log(`[WS] Client connected: ${socket.id}, User: anonymous`);
 
     // Join room based on user role
-    if (socket.user) {
-      if (socket.user.role === 'admin' || socket.user.role === 'user_pusat') {
-        socket.join('admins');
-      }
-      socket.join(`user_${socket.user.id}`);
-      if (socket.user.branchId) {
-        socket.join(`branch_${socket.user.branchId}`);
-      }
+    socket.join('admins');
+    socket.join(`user_${socket.id}`);
+    if (socket.user.branchId) {
+      socket.join(`branch_${socket.user.branchId}`);
     }
 
     // Handle equipment subscription
@@ -85,77 +65,4 @@ function initializeWebSocket(server) {
   return io;
 }
 
-// Emit equipment update to all connected clients
-function emitEquipmentUpdate(equipmentId, data) {
-  if (io) {
-    io.to(`equipment_${equipmentId}`).emit('equipment:update', data);
-    io.emit('equipment:list:update', data);
-  }
-}
-
-// Emit equipment status change
-function emitEquipmentStatusChange(equipmentId, status, details) {
-  if (io) {
-    io.to(`equipment_${equipmentId}`).emit('equipment:status:change', {
-      equipmentId,
-      status,
-      details,
-      timestamp: new Date().toISOString()
-    });
-    io.emit('equipment:status:update', {
-      equipmentId,
-      status,
-      details,
-      timestamp: new Date().toISOString()
-    });
-  }
-}
-
-// Emit alarm notification
-function emitAlarm(equipmentId, alarm) {
-  if (io) {
-    io.to(`equipment_${equipmentId}`).emit('equipment:alarm', alarm);
-    io.to('admins').emit('equipment:alarm', {
-      ...alarm,
-      equipmentId,
-      timestamp: new Date().toISOString()
-    });
-  }
-}
-
-// Emit connection test result
-function emitConnectionTestResult(equipmentId, result) {
-  if (io) {
-    io.to(`equipment_${equipmentId}`).emit('equipment:connection:test', result);
-  }
-}
-
-// Emit statistics update
-function emitStatsUpdate(stats) {
-  if (io) {
-    io.emit('stats:update', stats);
-  }
-}
-
-// Emit surveillance data update
-function emitSurveillanceUpdate(type, data) {
-  if (io) {
-    io.emit(`surveillance:${type}:update`, data);
-  }
-}
-
-// Get IO instance
-function getIO() {
-  return io;
-}
-
-module.exports = {
-  initializeWebSocket,
-  emitEquipmentUpdate,
-  emitEquipmentStatusChange,
-  emitAlarm,
-  emitConnectionTestResult,
-  emitStatsUpdate,
-  emitSurveillanceUpdate,
-  getIO
-};
+module.exports = { initializeWebSocket };

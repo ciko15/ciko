@@ -1,4 +1,3 @@
-
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -9,7 +8,7 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'db_2',
+  database: process.env.DB_NAME || 'test',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -18,7 +17,7 @@ const pool = mysql.createPool({
 async function diagnostic() {
   try {
     console.log('--- Database Diagnostic ---');
-    console.log(`Connecting to: ${process.env.DB_NAME || 'db_2'} as ${process.env.DB_USER}`);
+    console.log(`Connecting to: ${process.env.DB_NAME || 'test'} as ${process.env.DB_USER}`);
 
     const [users]: any = await pool.query('SELECT count(*) as count FROM users');
     console.log(`Users count: ${users[0].count}`);

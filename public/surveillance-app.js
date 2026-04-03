@@ -2,7 +2,6 @@
  * Surveillance Module
  * Frontend integration for RADAR (ASTERIX) and ADS-B surveillance
  */
-var API_URL = window.API_URL || '/api';
 var liveDataTimer = window.liveDataTimer;
 
 const surveillanceModule = (function() {

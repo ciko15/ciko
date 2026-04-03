@@ -1,7 +1,7 @@
 // Network Tools - Real Network Analytics
 // Uses backend API to capture and analyze real network packets from your system
 
-var API_URL = window.API_URL || '/api';
+
 var liveDataTimer = window.liveDataTimer;
 let capturedPackets = [];
 let filteredPackets = [];
