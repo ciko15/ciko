@@ -5,12 +5,19 @@ const path = require('path');
 const AIRPORT_CONFIG_PATH = path.join(__dirname, 'airport_config.json');
 const EQUIPMENT_CONFIG_PATH = path.join(__dirname, 'equipment_config.json');
 const USERS_CONFIG_PATH = path.join(__dirname, 'users_config.json');
-const TEMPLATES_CONFIG_PATH = path.join(__dirname, 'templates_config.json');
+const PARSING_CONFIG_PATH = path.join(__dirname, 'equipment_parsing_config.json');
+const SUP_CATEGORY_PATH = path.join(__dirname, 'sup_category.json');
+const AUTH_CONFIG_PATH = path.join(__dirname, 'equipment_otentication_config.json');
+const LIMITATION_CONFIG_PATH = path.join(__dirname, 'limitation_config.json');
+const TEMPLATE_CONFIG_PATH = path.join(__dirname, 'templates_config.json');
 
 // --- GENERIC JSON HELPERS ---
 function readJson(filePath, defaultValue = []) {
   try {
-    if (!fs.existsSync(filePath)) return defaultValue;
+    if (!fs.existsSync(filePath)) {
+      if (defaultValue !== null) writeJson(filePath, defaultValue);
+      return defaultValue;
+    }
     const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (err) {
@@ -50,7 +57,6 @@ function writeAirportConfig(data) {
 
 // --- IN-MEMORY DATA (HISTORICAL/NON-PERSISTENT) ---
 let equipmentLogsDB = [];
-let thresholdSettingsDB = [];
 let surveillanceStationsDB = [];
 let radarTargetsDB = [];
 let adsbAircraftDB = [];
@@ -161,6 +167,9 @@ async function createEquipment(data) {
     ...data, 
     id: Date.now(), 
     status: data.status || 'Normal',
+    status_ops: data.status_ops || 'Normal',
+    merk: data.merk || '-',
+    type: data.type || '-',
     lat: parseFloat(data.lat) || 0,
     lng: parseFloat(data.lng) || 0,
     isActive: data.isActive !== undefined ? (data.isActive === true || data.isActive === 'true') : true
@@ -203,49 +212,164 @@ async function deleteEquipment(id) {
   writeJson(EQUIPMENT_CONFIG_PATH, newList);
 }
 
-// --- SNMP TEMPLATES ---
+// --- EQUIPMENT PARSING CONFIGS (PREVIOUSLY SNMP TEMPLATES) ---
+async function getAllParsingConfigs() {
+  const configs = readJson(PARSING_CONFIG_PATH);
+  return configs;
+}
+
+async function getParsingConfigById(id) {
+  const configs = readJson(PARSING_CONFIG_PATH);
+  return configs.find(c => c.id == id || c.name == id) || null;
+}
+
+async function createParsingConfig(data) {
+  let configs = readJson(PARSING_CONFIG_PATH);
+  const newCfg = { 
+    id: data.id || `custom_${Date.now()}`,
+    name: data.name,
+    category: data.category || '',
+    files: data.files || '',
+    createdAt: new Date().toISOString()
+  };
+  configs.push(newCfg);
+  writeJson(PARSING_CONFIG_PATH, configs);
+  return newCfg;
+}
+
+async function updateParsingConfig(id, data) {
+  let configs = readJson(PARSING_CONFIG_PATH);
+  const index = configs.findIndex(c => c.id == id);
+  if (index !== -1) {
+    configs[index] = { ...configs[index], ...data, updatedAt: new Date().toISOString() };
+    writeJson(PARSING_CONFIG_PATH, configs);
+    return configs[index];
+  }
+  return null;
+}
+
+async function deleteParsingConfig(id) {
+  let configs = readJson(PARSING_CONFIG_PATH);
+  const newList = configs.filter(c => c.id != id);
+  writeJson(PARSING_CONFIG_PATH, newList);
+  return true;
+}
+
+// --- SNMP TEMPLATES (FOR CONFIGURATION MENU) ---
 async function getAllSnmpTemplates() {
-  const templates = readJson(TEMPLATES_CONFIG_PATH);
-  return templates;
+  return readJson(TEMPLATE_CONFIG_PATH);
 }
 
 async function getSnmpTemplateById(id) {
-  const templates = readJson(TEMPLATES_CONFIG_PATH);
-  return templates.find(t => t.id == id || t.name == id) || null;
+  const templates = readJson(TEMPLATE_CONFIG_PATH);
+  return templates.find(t => t.id == id) || null;
 }
 
 async function createSnmpTemplate(data) {
-  let templates = readJson(TEMPLATES_CONFIG_PATH);
-  const newTemp = { 
+  let templates = readJson(TEMPLATE_CONFIG_PATH);
+  const newTgl = { 
+    ...data, 
     id: data.id || `custom_${Date.now()}`,
-    name: data.name,
-    protocol: data.protocol || 'snmp',
-    description: data.description || '',
-    parameters: data.parameters || [],
-    isDefault: data.isDefault || false,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString() 
   };
-  templates.push(newTemp);
-  writeJson(TEMPLATES_CONFIG_PATH, templates);
-  return newTemp;
+  templates.push(newTgl);
+  writeJson(TEMPLATE_CONFIG_PATH, templates);
+  return newTgl;
 }
 
 async function updateSnmpTemplate(id, data) {
-  let templates = readJson(TEMPLATES_CONFIG_PATH);
+  let templates = readJson(TEMPLATE_CONFIG_PATH);
   const index = templates.findIndex(t => t.id == id);
   if (index !== -1) {
     templates[index] = { ...templates[index], ...data, updatedAt: new Date().toISOString() };
-    writeJson(TEMPLATES_CONFIG_PATH, templates);
+    writeJson(TEMPLATE_CONFIG_PATH, templates);
     return templates[index];
   }
   return null;
 }
 
 async function deleteSnmpTemplate(id) {
-  let templates = readJson(TEMPLATES_CONFIG_PATH);
+  let templates = readJson(TEMPLATE_CONFIG_PATH);
   const newList = templates.filter(t => t.id != id);
-  writeJson(TEMPLATES_CONFIG_PATH, newList);
+  writeJson(TEMPLATE_CONFIG_PATH, newList);
   return true;
+}
+
+// --- SUP CATEGORIES ---
+async function getAllSupCategories() {
+  return readJson(SUP_CATEGORY_PATH);
+}
+
+async function getSupCategoriesByCategory(category) {
+  const data = readJson(SUP_CATEGORY_PATH);
+  return data.find(c => c.category === category) || { category, sub_categories: [] };
+}
+
+async function updateSupCategory(category, subCategories) {
+  let data = readJson(SUP_CATEGORY_PATH);
+  const index = data.findIndex(c => c.category === category);
+  if (index !== -1) {
+    data[index].sub_categories = subCategories;
+  } else {
+    data.push({ category, sub_categories: subCategories });
+  }
+  writeJson(SUP_CATEGORY_PATH, data);
+  return true;
+}
+
+// --- EQUIPMENT OTENTICATION (IP COMPONENTS) ---
+async function getOtenticationByEquipment(equipmentId) {
+  const data = readJson(AUTH_CONFIG_PATH);
+  return data.filter(a => a.equipt_id == equipmentId);
+}
+
+async function createOtentication(data) {
+  let authList = readJson(AUTH_CONFIG_PATH);
+  const newItem = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    name: data.name,
+    equipt_id: data.equipt_id,
+    ip_address: data.ip_address
+  };
+  authList.push(newItem);
+  writeJson(AUTH_CONFIG_PATH, authList);
+  return newItem;
+}
+
+async function deleteOtenticationByEquipment(equipmentId) {
+  let authList = readJson(AUTH_CONFIG_PATH);
+  const newList = authList.filter(a => a.equipt_id != equipmentId);
+  writeJson(AUTH_CONFIG_PATH, newList);
+}
+
+// --- LIMITATION CONFIGS ---
+async function getLimitationsByEquipment(equipmentId) {
+  const data = readJson(LIMITATION_CONFIG_PATH);
+  return data.find(l => l.equipt_id == equipmentId) || {};
+}
+
+async function updateLimitation(data) {
+  let list = readJson(LIMITATION_CONFIG_PATH);
+  const index = list.findIndex(l => l.equipt_id == data.equipt_id);
+  const item = {
+    id: data.id || Date.now(),
+    name: data.name,
+    category: data.category,
+    equipt_id: data.equipt_id,
+    value: data.value,
+    wlv: data.wlv,
+    alv: data.alv,
+    whv: data.whv,
+    ahv: data.ahv
+  };
+  
+  if (index !== -1) {
+    list[index] = item;
+  } else {
+    list.push(item);
+  }
+  writeJson(LIMITATION_CONFIG_PATH, list);
+  return item;
 }
 
 // --- USERS ---
@@ -387,12 +511,23 @@ module.exports = {
   updateEquipment,
   updateEquipmentStatus,
   deleteEquipment,
-  // SNMP Templates
-  getAllSnmpTemplates,
-  getSnmpTemplateById,
-  createSnmpTemplate,
-  updateSnmpTemplate,
-  deleteSnmpTemplate,
+  // Parsing Configs
+  getAllParsingConfigs,
+  getParsingConfigById,
+  createParsingConfig,
+  updateParsingConfig,
+  deleteParsingConfig,
+  // Sup Categories
+  getAllSupCategories,
+  getSupCategoriesByCategory,
+  updateSupCategory,
+  // Equipment Otentication
+  getOtenticationByEquipment,
+  createOtentication,
+  deleteOtenticationByEquipment,
+  // Limitation Configs
+  getLimitationsByEquipment,
+  updateLimitation,
   // Categories
   getAllCategories,
   // Equipment Logs
@@ -424,5 +559,11 @@ module.exports = {
   getAllUsers,
   getUserByUsername,
   getUserById,
-  createUser
+  createUser,
+  // SNMP Templates
+  getAllSnmpTemplates,
+  getSnmpTemplateById,
+  createSnmpTemplate,
+  updateSnmpTemplate,
+  deleteSnmpTemplate
 };

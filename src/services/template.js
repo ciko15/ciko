@@ -40,22 +40,13 @@ function transformFromFrontend(data) {
 
 // Get all templates
 async function getAllTemplates() {
-  const templates = await db.getAllSnmpTemplates();
-  // Transform all
-  const transformed = templates.map(transformToFrontend);
-  
-  // Sort: system first, then by name
-  return transformed.sort((a, b) => {
-    if (a.is_system && !b.is_system) return -1;
-    if (!a.is_system && b.is_system) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const templates = await db.getAllParsingConfigs();
+  return templates;
 }
 
 // Get template by ID
 async function getTemplateById(id) {
-  const template = await db.getSnmpTemplateById(id);
-  return transformToFrontend(template);
+  return await db.getParsingConfigById(id);
 }
 
 // Get templates by equipment type
@@ -68,21 +59,17 @@ async function getTemplatesByType(equipmentType) {
 
 // Create new template
 async function createTemplate(data) {
-  const jsonData = transformFromFrontend(data);
-  const newTemplate = await db.createSnmpTemplate(jsonData);
-  return transformToFrontend(newTemplate);
+  return await db.createParsingConfig(data);
 }
 
 // Update template
 async function updateTemplate(id, data) {
-  const jsonData = transformFromFrontend(data);
-  const updated = await db.updateSnmpTemplate(id, jsonData);
-  return transformToFrontend(updated);
+  return await db.updateParsingConfig(id, data);
 }
 
 // Delete template
 async function deleteTemplate(id) {
-  return await db.deleteSnmpTemplate(id);
+  return await db.deleteParsingConfig(id);
 }
 
 // Get default template for equipment type
