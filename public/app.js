@@ -295,8 +295,8 @@ window.addDataSourceRow = function (sourceId = '') {
     <select class="form-control data-source-select" style="flex: 1;">
       ${options}
     </select>
-    <button type="button" class="btn btn-icon btn-delete remove-source-btn" title="Remove Source">
-      <i class="fas fa-minus-circle"></i>
+    <button type="button" class="btn-delete remove-source-btn" title="Remove Source">
+      <i class="fas fa-trash"></i>
     </button>
   `;
 
@@ -375,8 +375,8 @@ window.addIpComponentRow = function (data = { name: '', ip_address: '' }) {
       <input type="text" class="comp-ip" placeholder="IP Address" value="${data.ip_address}">
     </div>
     <div class="form-group" style="flex: 0; align-self: flex-end; margin-bottom: 15px;">
-      <button type="button" class="btn btn-icon delete" onclick="document.getElementById('${rowId}').remove()">
-        <i class="fas fa-minus"></i>
+      <button type="button" class="btn-delete" onclick="document.getElementById('${rowId}').remove()" title="Remove Component">
+        <i class="fas fa-trash"></i>
       </button>
     </div>
   `;
@@ -507,13 +507,13 @@ function renderEquipmentTable(data) {
       <td style="text-align: center;">${item.merk || '-'} / ${item.type || '-'}</td>
       <td style="text-align: center;">${item.lat}, ${item.lng}</td>
       <td style="text-align: center; white-space: nowrap;">
-        <button class="btn btn-icon btn-view" title="View Details" onclick="viewEquipmentDetail(${item.id})">
+        <button class="btn-view" title="View Details" onclick="viewEquipmentDetail(${item.id})">
           <i class="fas fa-eye"></i>
         </button>
-        <button class="btn btn-icon btn-edit" title="Edit" onclick="editEquipment(${item.id})">
+        <button class="btn-edit" title="Edit" onclick="editEquipment(${item.id})">
           <i class="fas fa-edit"></i>
         </button>
-        <button class="btn btn-icon btn-delete" title="Delete" onclick="deleteEquipment(${item.id})">
+        <button class="btn-delete" title="Delete" onclick="deleteEquipment(${item.id})">
           <i class="fas fa-trash"></i>
         </button>
       </td>
@@ -742,7 +742,7 @@ async function loadAirports() {
           <td>${a.ipBranch || '-'}</td>
           <td>${a.totalEquipment || 0}</td>
           <td>
-            <button class="btn btn-icon" onclick="editAirport(${a.id})"><i class="fas fa-edit"></i></button>
+            <button class="btn-edit" onclick="editAirport(${a.id})" title="Edit Airport"><i class="fas fa-edit"></i></button>
           </td>
         </tr>
       `).join('');
@@ -1289,8 +1289,8 @@ function renderConfigTable(tab, data, tbody) {
         <td>${item.value_type || 'numeric'}</td>
         <td>${item.expected_value || (item.wlv ? `Range: ${item.alv}-${item.ahv}` : '-')}</td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="editConfig('limitation', '${item.id}')"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-sm btn-outline text-danger" onclick="deleteConfig('limitation', '${item.id}')"><i class="fas fa-trash"></i></button>
+          <button class="btn-edit" onclick="editConfig('limitation', '${item.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn-delete" onclick="deleteConfig('limitation', '${item.id}')" title="Delete"><i class="fas fa-trash"></i></button>
         </td>
       `;
     } else if (tab === 'authentication') {
@@ -1299,8 +1299,8 @@ function renderConfigTable(tab, data, tbody) {
         <td><code>${item.ip_address}</code></td>
         <td>${item.equipt_id ? `ID: ${item.equipt_id}` : '<span class="text-muted">Global</span>'}</td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="editConfig('authentication', '${item.id}')"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-sm btn-outline text-danger" onclick="deleteConfig('authentication', '${item.id}')"><i class="fas fa-trash"></i></button>
+          <button class="btn-edit" onclick="editConfig('authentication', '${item.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn-delete" onclick="deleteConfig('authentication', '${item.id}')" title="Delete"><i class="fas fa-trash"></i></button>
         </td>
       `;
     } else if (tab === 'parsing') {
@@ -1309,8 +1309,8 @@ function renderConfigTable(tab, data, tbody) {
         <td><span class="badge badge-secondary">${item.category}</span></td>
         <td><code>${item.parser_file || '-'}</code></td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="editConfig('parsing', '${item.id}')"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-sm btn-outline text-danger" onclick="deleteConfig('parsing', '${item.id}')"><i class="fas fa-trash"></i></button>
+          <button class="btn-edit" onclick="editConfig('parsing', '${item.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn-delete" onclick="deleteConfig('parsing', '${item.id}')" title="Delete"><i class="fas fa-trash"></i></button>
         </td>
       `;
     } else if (tab === 'sup-category') {
@@ -1318,8 +1318,8 @@ function renderConfigTable(tab, data, tbody) {
         <td><strong>${item.category}</strong></td>
         <td>${(item.sub_categories || []).map(s => `<span class="badge badge-outline">${s}</span>`).join(' ')}</td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="editConfig('sup-category', '${item.id || item.category}')"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-sm btn-outline text-danger" onclick="deleteConfig('sup-category', '${item.id || item.category}')"><i class="fas fa-trash"></i></button>
+          <button class="btn-edit" onclick="editConfig('sup-category', '${item.id || item.category}')" title="Edit"><i class="fas fa-edit"></i></button>
+          <button class="btn-delete" onclick="deleteConfig('sup-category', '${item.id || item.category}')" title="Delete"><i class="fas fa-trash"></i></button>
         </td>
       `;
     } else if (tab === 'category') {
