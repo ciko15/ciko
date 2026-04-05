@@ -1593,6 +1593,51 @@ tbody tr:hover {
   margin: 15px;
 }
 
+/* Custom Leaflet Control Layer Button at Bottom-Right */
+.leaflet-bottom.leaflet-right .leaflet-control-layers {
+  margin-bottom: 30px !important; /* Position it above the attribution */
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.leaflet-control-layers-toggle {
+  background-color: var(--accent-primary) !important;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>') !important;
+  background-size: 20px !important;
+  background-position: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  transition: all 0.3s ease;
+}
+
+.leaflet-control-layers-toggle:hover {
+  background-color: #1d4ed8 !important;
+  transform: scale(1.05);
+}
+
+.leaflet-control-layers-list {
+  color: var(--text-primary);
+  padding: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.leaflet-control-layers-expanded {
+  padding: 12px !important;
+  border: none !important;
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-radius: 12px !important;
+}
+
+.leaflet-control-layers-selector {
+  margin-right: 8px;
+}
+
 .popup-airport {
   min-width: 200px;
 }
@@ -1804,6 +1849,10 @@ tbody tr:hover {
 .modal-overlay:not(.hidden) {
   opacity: 1;
   visibility: visible;
+}
+
+#dataSourceOverlayModal {
+  z-index: 11000;
 }
 
 .modal-container {
@@ -2586,6 +2635,68 @@ tr.child-airport {
   outline: none;
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.filter-.search-box input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  width: 300px;
+}
+
+/* Table Action Buttons */
+.btn-icon {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin: 0 2px;
+}
+
+.btn-icon.btn-view { color: #3b82f6; }
+.btn-icon.btn-edit { color: #10b981; }
+.btn-icon.btn-delete { color: #ef4444; }
+
+.btn-icon:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Data Source Configuration Styles */
+.data-source-row {
+  background: var(--bg-secondary);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.data-source-select {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  border-radius: 6px !important;
+  padding: 8px !important;
+}
+
+.remove-source-btn {
+  color: #ef4444 !important;
+  font-size: 1.1rem !important;
+}
+
+.remove-source-btn:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
 /* Card Header Improvements */

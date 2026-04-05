@@ -1,92 +1,64 @@
-# Spesifikasi Implementasi Restrukturisasi Database & UI Equipment
+# Issue: Penambahan Menu "Configure" dan Penyesuaian Logika "Limitation"
 
-Dokumen ini berisi spesifikasi teknis dan terstruktur mengenai *issue* restrukturisasi penyimpanan dan tampilan data *equipment*. Instruksi ini didesain agar sangat spesifik dan bersahabat untuk didistribusikan kepada *programmer* baru maupun agen AI. Gunakan daftar tugas (*task list*) di bawah untuk melacak proses pengerjaan.
+## Deskripsi Singkat
+Sistem saat ini sudah memiliki beberapa file konfigurasi database JSON (`limitation_config.json`, `equipment_otentication_config.json`, `equipment_parsing_config.json`, `sup_category.json`, `category.json` dll). Kita perlu membuat satu menu antarmuka (UI) khusus bernama **"Configure"** yang berfungsi sebagai panel kontrol pusat untuk mengelola seluruh data dari konfigurasi ini.
 
-## 📝 1. Pembaruan Skema `equipment`
-Ubah struktur data utama `equipment` (mis. pada file `equipment_config.json` atau tabel *database* yang relevan) dengan format berikut:
+Selain itu, terdapat perubahan logika bisnis mendasar pada konfigurasi **Limitation**: data limitation tidak lagi dibuat secara individual per _equipment_ (alat), melainkan menjadi standar parameter yang terkait dengan satu **Sub-Kategori (`sup_category`)** alat yang sama. Standar limitasi ini hanya bisa dikelola melalui menu Configure. 
 
-- [ ] **`id`**: *String / UUID* (Bersifat *unique*)
-- [ ] **`name`**: *String* (Nama alat)
-- [ ] **`category`**: *Enum / String*
-  - Pilihan wajib: `Communication`, `Navigation`, `Surveillance`, `Data Processing`, `Support`
-- [ ] **`sup_category`**: *String*
-  - Mengambil data berelasi / referensi dinamis terhadap daftar *database* `sup_category`.
-  - **Kebutuhan Form UI**: Tambahkan fitur / tombol agar pengguna dapat menciptakan data *sup_category* baru langsung dari area *form* UI pemasukan *equipment* (*on-the-fly*) bila opsinya dirasa kurang.
-- [ ] **`merk`**: *String* (Set nilai *default* ke `"-"` jika tidak diinput)
-- [ ] **`type`**: *String* (Set nilai *default* ke `"-"` jika tidak diinput)
-- [ ] **`status`**: *Enum / String*
-  - Pilihan wajib: `Active`, `Inactive`
-- [ ] **`status_ops`**: *Enum / String*
-  - Pilihan wajib: `Normal`, `Warning`, `Alarm`, `Disconnect`
-- [ ] **`description`**: *Text / String* (Keterangan lebih lanjut tentang alat)
-- [ ] **`equipt_auth`**: *Array / Relational data* (Ini memicu fitur sinkronisasi pembuatan/penambahan IP jaringan dari UI Form agar datanya otomatis disematkan atau mengalir ke entitas tabel `equipment_otentication_config`)
+## Kriteria Penerimaan (Acceptance Criteria)
 
----
+### 1. Pembuatan Menu Utama "Configure"
+*   Tambahkan item menu baru di navigasi utama (side / header navigation) dengan label **"Configure"**.
+*   Di dalam menu Configure, sediakan sub-menu atau _Tab_ untuk mengelola entitas berikut:
+    1.  **Limitation** -> Terhubung ke `limitation_config.json`
+    2.  **Authentication** -> Terhubung ke `equipment_otentication_config.json`
+    3.  **Parsing** -> Terhubung ke `equipment_parsing_config.json`
+    4.  **Category** -> Mengelola daftar kategori utama.
+    5.  **Sup Category** -> Terhubung ke `sup_category.json`
 
-## 📝 2. Penciptaan Database / Koleksi `sup_category`
-Buat skema penampungan baru (berupa Tabel / File JSON) khusus untuk sumber data (*supply*) *dropdown* *sub-category*.
+### 2. Perubahan Fundamental pada Logika "Limitation"
+*   **Perubahan Referensi Data**: Data pada limitation _tidak boleh_ menggunakan referensi per ID alat individu lagi. Data ini harus merujuk pada `sup_category` (sebagai standar parameter untuk seluruh alat pada sub-kategori tersebut).
+*   **Pemisahan Proses Input**: Input nilai limitation tidak lagi dilakukan/tidak tersedia saat membuat atau mengedit data Equipment. Proses input/edit batasan limitasi HANYA BISA dilakukan di sub-menu **Configure -> Limitation**. 
+*   **Tipe Parameter Beragam (Dinamis)**: Form input limitation harus mendukung jenis (tipe) data yang berbeda. Jika sebelumnya limitation banyak berisi angka (wlv, alv, ahv, whv dll), sekarang limitation harus bisa memiliki nilai berupa **string (teks)** seperti "ok", "standby", atau berupa **persentase (%)**.
+*   **Modifikasi Struktur Database Limitation**: Tambahkan kolom/field baru pada tabel (atau JSON) limitation untuk menyesuaikan tipe data yang beragam tersebut.
+*   **Dummy Data**: Tambahkan beberapa parameter limitation permulaan (seeding) sebagai contoh, misal: Untuk _sup category_ **VHF A/G**, buat _parameter_ dengan nama **Full Services** (contoh value: "ok").
 
-- [ ] Buat file sistem untuk `sup_category`.
-- [ ] Lakukan injeksi (*seed*) data basis bawaannya secara terkelompok:
-  - **Communication**: VHF A/G, VSCS, HF, VHF G/G, DS, VSAT, Voice REC, D-ATIS
-  - **Navigation**: DVOR, DME, ILS-TDME, ILS-LLZ, ILS-GP, ILS-IM, ILS-MM, ILS-OM, NDB, GNSS, MLS, GBAS
-  - **Surveillance**: RADAR, ADSB, ADSC, MLAT
-  - **Data Processing**: ATCAS, AMSC, AMHS, ASMGCS
-  - **Support**: G-LLZ, G-RADAR, G-OPS, UPS, GENSET
-- [ ] **Kebutuhan Integrasi Form**: Hubungkan relasi interaksinya. Jika ada penambahan pada entitas ini, maka formulir isian `equipment` pada *frontend* otomatis langsung mengakomodir pilhannya. Form *equipment* memuat logika *dependent/cascading list*: isi dari tipe dropdown *sup_category* berpatokan pada pilihan form sebelumnya di field `category`.
+### 3. Perbaikan Fungsionalitas Modal/Detail
+*   Di pada setiap tombol detail (seperti saat membuka popup/modal detail untuk parameter atau konfigurasi apapun), pastikan tombol "X" atau tombol close berfungsi secara total untuk menyembunyikan elemen tanpa adanya interaksi tersangkut (macet).
 
 ---
 
-## 📝 3. Migrasi Entitas `templates_config` menjadi `equipment_parsing_config`
-Tabel identifikasi *setup* parser yang sudah ada perlu diubah tata nama penampungnya.
+## Panduan Implementasi (Bagi Programmer/AI)
 
-- [ ] Ubah (*rename*) tabel/file dari `templates_config` menjadi nama baru yakni `equipment_parsing_config`.
-- [ ] Sesuaikan skema struktur propertinya menjadi:
-  - **`id`**: *String / UUID* (Bersifat *unique*)
-  - **`name`**: *String* (Contoh: "DVOR MARU 220")
-  - **`category`**: *String* (Nilainya dibatasi/menarik referensi dari list `category` *equipment*: seperti `Navigation` dst.)
-  - **`files`**: *String / Path Directory* (Lokasi letaknya modul *parser code*, contoh: `"/public/parsers/asterix.js"`)
-- [ ] *Search-and-Replace (Refleksi di kode keseluruhan)*: Modifikasi konfigurasi *backend route / REST API endpoints*, *frontend fetch() parameter*, serta seluruh perumusan kodenya dari merujuk ke tabel lama (`templates_config`) menjadi nama yang benar (`equipment_parsing_config`).
+### Bagian 1: Backend (Server & Database File)
+1.  **Sesuaikan File Konfigurasi JSON Limitation** (`db/limitation_config.json`):
+    *   Hapus referensi ke `id` alat yang sudah spesifik (jika ada).
+    *   Tambahkan referensi untuk `sup_category`.
+    *   Ubah contoh skema datanya agar mendukung struktur parameter seperti ini:
+        ```json
+        {
+           "id": 1,
+           "sup_category": "VHF A/G",
+           "parameter_name": "Full Services",
+           "value_type": "string",
+           "expected_value": "ok"
+        }
+        ```
+    *   (Gunakan penamaan _key_ JSON yang semantik sesuai kebutuhan).
+2.  **API Routes** (`src/server.ts` dst.):
+    *   Buat atau pastikan API endpoints CRUD (GET, POST, PUT, DELETE) siap untuk endpoint-endpoint configurasi: `/api/limitations`, `/api/otentication`, `/api/parsing`, `/api/category`, `/api/sup_category`.
+    *   Pada API Detail Equipment (`GET /api/equipment/:id`), logika query limitation harus ikut diubah: jangan cari berdasarkan `equipt_id`, melainkan cari limitation berdasarkan kolom `sup_category` alat tersebut.
 
----
+### Bagian 2: Frontend (User Interface)
+1.  **Navigasi & Menu Baru**:
+    *   Buka `public/index.html` dan letakkan penambahan menu sidebar **Configure**.
+    *   Sembunyikan dan tampilkan blok-blok menggunakan atribut `.hidden` pada div terkait ketika Sub-Menu configuration diklik menggunakan JavaScript.
+2.  **Formulir Limitation di UI**:
+    *   Hapus input form limitation dari proses `Create/Edit Equipment`.
+    *   Di panel _Configure -> Limitation_, buat _Data Table_ yang melist semua _limitation standard_. 
+    *   Sediakan form untuk *Add/Edit Limitation* yang menggunakan dropdown untuk memilih `sup_category`, lalu opsi untuk menentukan jenis input valuenya ("Angka/Nominal", "Teks/Status", atau "Persentase").
+3.  **Sempurnakan Fungsi Close (X)**:
+    *   Inspeksi semua file JS (terutama `public/app.js`), cari id popup modal (contoh: `#detailModal`).
+    *   Pastikan pada tag `<button class="close">x</button>` dan div overlay (`.modal-backdrop`) semuanya ditautkan dengan `addEventListener('click')` yang berfungsi menghilangkan kelas _visible_ / menghidden modal. Cek jika ada double event listener yang menabrak.
 
-## 📝 4. Penciptaan Database / Koleksi `equipment_otentication_config`
-Menjembatani akses otentikasi IP ke banyak komponen riil. Karena secara kenyataan satu entitas *equipment* utama bisa terdiri dari banyak susunan sub-komponen (yang mana tiap komponen dapat punya alamat jaringannya sendiri).
-
-- [ ] Buat file/tabel `equipment_otentication_config`.
-- [ ] Pastikan susunan kerangka datanya mengandung:
-  - **`id`**: *String / UUID* (Bersifat *unique*)
-  - **`name`**: *String* (Nama bagian spesifik per komponen. Contoh: "TX 1 VHF Primary" atau "RX 2")
-  - **`equipt_id`**: *String / Relasi* (*Foreign Key*. Diisi secara mutlak oleh sistem mengambil nilai / me*lookup* `id` spesifik dari data *equipment* yang ada)
-  - **`ip_address`**: *String (Format IP)* (Alamat IPv4 / IPv6 dari perangkat penunjang komponen untuk dikontak *backend*)
-
----
-
-## 📝 5. Penciptaan Database / Koleksi `limitation_config`
-Tabel mandiri penyimpan kriteria parameter batas keamanan angka alarm untuk toleransi sensor peralatan instrumen.
-
-- [ ] Buat file/tabel bernama `limitation_config`. Format properti yang harus ada berupa:
-  - **`id`**: *String / UUID* (Bersifat *unique*)
-  - **`name`**: *String* (Indikator label, Contohnya: "[DDM] LLZ", atau "GP")
-  - **`category`**: *String* (Nilai persis sama seperti *category* spesifik tipe alat tersebut)
-  - **`equipt_id`**: *String / Relasi* (Merujuk *equipment id* mana limitasi parameter ini diberlakukan)
-  - **`value`**: *Number / String* (Nilai normal idealnya. Contoh: "0")
-  - **`wlv`**: *Number / String* (*Warning Low Value* / batas peringatan rendah. Contoh: "-2" ke bawah)
-  - **`alv`**: *Number / String* (*Alarm Low Value* / toleransi minimum kegagalan. Contoh: "-4" ke bawah)
-  - **`whv`**: *Number / String* (*Warning High Value* / batas peringatan atas. Contoh: "2")
-  - **`ahv`**: *Number / String* (*Alarm High Value* / toleransi maksimum lonjakan. Contoh: "4")
-- [ ] **Kebutuhan Form UI**: Terdapat rekayasa filter data. Pada *dropdown* *form input* untuk menyeleksi perangkat (`equipt_id`), opsi yang bisa dipilih hanya alat spesifik yang nilai kategorinya sesuai dan sejajar (*filter match*) dengan kategori (*Field Category*) yang sudah ditentukan sebelumnya oleh user.
-
----
-
-## 📝 6. Standar Revamp Komponen UI (Form & Interface Detail View)
-Syarat penyesuaian fungsional pada ranah tatap muka / antarmuka pengguna sehubungan lima perubahan backend di atas:
-
-- [ ] **Halaman *Create/Update Equipment***
-  - Form tidak diizinkan menggunakan isian teks manual statis lagi untuk *Category* & *Sub-category*, gantilah dengan *Select Dropdowns* yang dinamis (*dependent lists*).
-  - Terdapat mekanisme penyisipan antarmuka ("*Add Sub-Category / Add Item*") yang berdekatan dengan *flow form* utama, agar transisi pembuatan baru tak merepotkan admin.
-  - Untuk otentikasi UI (seperti pembuatan relasi data `equipment_otentication_config`) buatlah fitur semacam struktur *repeater box* atau list *Add IP component* agar berjejer menyatu dalam proses pendataan alat utamanya.
-- [ ] **Halaman *Detail/View Equipment*** (Dashboard Spesifikasi Detail)
-  - Buat bagian terpisah (segmentasi jelas) menjabarkan label sederhana alat (*Merk, type, keterangan, status aktif, status operasional*).
-  - Tampilkan data turunan berupa bentuk **Tabel Bersarang / Nested Grid / Kartu** untuk menyuguhkan list IP yang masuk ke spesifikasi `equipment_otentication_config` si alat tersebut.
-  - Sediakan panel / tabel rekapitulasi batasan *threshold* limitasi toleransinya (nilai wlv, alv, ahv, whv bersumber di entitas `limitation_config`) sehigga bisa dilihat tanpa perlu pindah buka menu lain.
+**Note Tambahan**: Semua komponen tampilan tabel, tombol Add, Edit, Delete pada menu Configure harus dibuat semirip mungkin dengan tabel CRUD pada equipment untuk menjaga kekonsistenan desain (UX).

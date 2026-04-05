@@ -1,7 +1,6 @@
 /* Configuration Navigation Panel Styles */
 .config-nav-sidebar {
   background: var(--bg-card);
-  /* border: 1px solid var(--border-color); */
   border-radius: 12px;
   padding: 15px;
   min-width: 220px;
@@ -57,53 +56,81 @@
   animation: fadeIn 0.3s ease;
 }
 
+/* Monitoring Layout for Config Center */
+.monitoring-layout {
+  display: flex;
+  gap: 20px;
+  min-height: 500px;
+}
+
+.config-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 10px;
+}
+
+.config-table th {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: 12px 15px;
+  text-align: left;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.config-table td {
+  padding: 15px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.config-table tr:hover {
+  background: var(--bg-card-hover);
+}
+
+/* Badge Styles */
+.badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.badge-info { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
+.badge-secondary { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+.badge-outline { border: 1px solid var(--border-color); color: var(--text-secondary); }
+.badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+
+/* Threshold Range Display in Details */
+.threshold-range {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.range-item {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.range-item.danger { background: rgba(220, 38, 38, 0.2); color: #ef4444; }
+.range-item.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 1024px) {
-  .monitoring-layout {
-    grid-template-columns: 1fr;
-  }
-  
-  .config-nav-sidebar {
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  
-  .config-nav-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  
-  .config-nav-item {
-    flex: 1;
-    min-width: 150px;
-    justify-content: center;
-  }
-  
-  .config-nav-item span {
-    display: none;
-  }
-  
-  .config-nav-item i {
-    margin: 0;
-  }
-}
-
-@media (max-width: 768px) {
-  .config-nav-sidebar {
-    padding: 10px;
-  }
-  
-  .config-nav-item {
-    padding: 10px 12px;
-  }
+  .monitoring-layout { flex-direction: column; }
+  .config-nav-sidebar { min-width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); }
+  .config-nav-list { flex-direction: row; flex-wrap: wrap; }
 }

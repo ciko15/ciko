@@ -96,14 +96,14 @@ async function collectEquipmentData() {
                         data: { ...parsedData, status, triggeredParameters: triggeredParameters || [] },
                         source: config.templateId || 'snmp'
                     });
-                    
+
                     // File logging (new)
                     const fileLogger = require('./utils/fileLogger');
-                    await fileLogger.log(item.name || `equip_${item.id}`, item.id, { 
-                        ...parsedData, 
-                        status, 
+                    await fileLogger.log(item.name || `equip_${item.id}`, item.id, {
+                        ...parsedData,
+                        status,
                         triggeredParameters: triggeredParameters || [],
-                        _ip: parsedData._ip 
+                        _ip: parsedData._ip
                     });
                 } catch (err: any) {
                     console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
@@ -122,11 +122,11 @@ async function collectSurveillanceData() {
         const db = require('../db/database');
         const allEquipment = await db.getAllEquipment({ limit: 10000, isActive: true });
         const equipmentList = allEquipment.data || allEquipment;
-        
+
         const surveillanceEquipment = equipmentList.filter((item: any) => {
             const config = item.snmpConfig || item.snmp_config;
-            return item.category === 'Surveillance' && config && config.enabled && 
-                   (config.method === 'asterix' || config.method === 'adsb');
+            return item.category === 'Surveillance' && config && config.enabled &&
+                (config.method === 'asterix' || config.method === 'adsb');
         });
 
         for (const item of surveillanceEquipment) {
@@ -138,7 +138,7 @@ async function collectSurveillanceData() {
                     await db.updateEquipmentStatus(item.id, status);
                     await db.createEquipmentLog({
                         equipmentId: item.id,
-                        data: { 
+                        data: {
                             status,
                             receiverStatus: result.status,
                             targetsCount: result.targets ? result.targets.length : 0,
@@ -149,19 +149,19 @@ async function collectSurveillanceData() {
                         source: 'asterix'
                     });
                 } else if (config.method === 'adsb' && AdsbReceiver) {
-                     const result = await AdsbReceiver.fetchData(item.id);
-                     const status = result.aircraft && result.aircraft.length > 0 ? 'Normal' : 'No Targets';
-                     await db.updateEquipmentStatus(item.id, status);
-                     await db.createEquipmentLog({
-                         equipmentId: item.id,
-                         data: {
-                             status,
-                             receiverStatus: result.status,
-                             aircraftCount: result.aircraft ? result.aircraft.length : 0,
-                             stationName: item.name
-                         },
-                         source: 'adsb'
-                     });
+                    const result = await AdsbReceiver.fetchData(item.id);
+                    const status = result.aircraft && result.aircraft.length > 0 ? 'Normal' : 'No Targets';
+                    await db.updateEquipmentStatus(item.id, status);
+                    await db.createEquipmentLog({
+                        equipmentId: item.id,
+                        data: {
+                            status,
+                            receiverStatus: result.status,
+                            aircraftCount: result.aircraft ? result.aircraft.length : 0,
+                            stationName: item.name
+                        },
+                        source: 'adsb'
+                    });
                 }
             } catch (err: any) {
                 console.error(`[SCHEDULER-SURVEILLANCE] Error for ${item.name}:`, err.message);
@@ -211,6 +211,7 @@ function getEquipmentCountByCategory(equipmentList: any[]) {
 const app = new Elysia()
     .use(cors())
     .use(serverTiming())
+    .use(staticPlugin({ assets: 'public', prefix: '' }))
     .derive(({ request, set }: any) => {
         const auth = request.headers.get('authorization');
         if (auth && auth.startsWith('Bearer ')) {
@@ -225,29 +226,29 @@ const app = new Elysia()
         }
         return { user: null };
     })
-    
+
     // Web Application SEO & Aesthetics Implementation
     // This server serves the modern Bun/Elysia backend and the static TOC frontend
-    
+
     // --- GLOBAL ERROR HANDLER ---
     .onError(({ code, error, set }) => {
         if (code === 'NOT_FOUND') {
             set.status = 404;
-            return { 
-                success: false, 
-                message: 'Endpoint NOT_FOUND. Pastikan URL dan Method (GET/POST) sudah benar.', 
+            return {
+                success: false,
+                message: 'Endpoint NOT_FOUND. Pastikan URL dan Method (GET/POST) sudah benar.',
                 error: 'Route not found in Elysia'
             };
         }
-        
+
         // Detailed logging for debugging
         const err = error as any;
         console.error(`[SERVER-ERROR] ${code} (${err.name || 'Unknown Error'}): ${err.message}`);
         if (err.stack) console.error(err.stack);
-        
+
         if (!set.status || set.status === 200) set.status = 500;
-        return { 
-            success: false, 
+        return {
+            success: false,
             message: err.message || 'Internal Server Error',
             type: err.name || code
         };
@@ -258,18 +259,18 @@ const app = new Elysia()
     .post('/api/login', async ({ body, set }) => {
         const { username, password } = body as any;
         const user = await db.getUserByUsername(username);
-        
+
         if (!user || user.password !== password) {
             set.status = 401;
             return { success: false, message: 'Invalid username or password' };
         }
-        
+
         // In a real app, generate a JWT. Here we return a session token.
         const token = `static-token-${user.role}-${Date.now()}`;
-        return { 
-            success: true, 
-            token, 
-            user: { username: user.username, role: user.role } 
+        return {
+            success: true,
+            token,
+            user: { username: user.username, role: user.role }
         };
     })
 
@@ -277,7 +278,7 @@ const app = new Elysia()
     .get('/api/equipment/stats', async () => {
         try {
             const stats = await db.getEquipmentStatsSummary();
-            
+
             let normal = 0, warning = 0, alert = 0, disconnect = 0;
             if (stats && Array.isArray(stats.statuses)) {
                 stats.statuses.forEach((row: any) => {
@@ -287,7 +288,7 @@ const app = new Elysia()
                     if (row.status === 'Disconnect') disconnect = parseInt(row.count);
                 });
             }
-            
+
             const cats: any = {
                 Communication: 0, Navigation: 0, Surveillance: 0, 'Data Processing': 0, Support: 0
             };
@@ -298,13 +299,13 @@ const app = new Elysia()
                     }
                 });
             }
-            
+
             return {
                 total: stats?.total || 0,
-                normal: stats.statuses.find((s:any) => s.status === 'Normal')?.count || 0,
-                warning: stats.statuses.find((s:any) => s.status === 'Warning')?.count || 0,
-                alert: stats.statuses.find((s:any) => s.status === 'Alert')?.count || 0,
-                disconnect: stats.statuses.find((s:any) => s.status === 'Disconnect')?.count || 0,
+                normal: stats.statuses.find((s: any) => s.status === 'Normal')?.count || 0,
+                warning: stats.statuses.find((s: any) => s.status === 'Warning')?.count || 0,
+                alert: stats.statuses.find((s: any) => s.status === 'Alert')?.count || 0,
+                disconnect: stats.statuses.find((s: any) => s.status === 'Disconnect')?.count || 0,
                 byCategory: cats
             };
         } catch (error: any) {
@@ -326,7 +327,7 @@ const app = new Elysia()
             const airportId = airport.id;
             const airportEquipment = (equipmentData || []).filter((e: any) => e.airport_id === airportId || e.branch_id === airportId || e.airportId === airportId || e.branchId === airportId);
             const activeEquipment = (airportEquipment || []).filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1' || e.is_active === true);
-            
+
             return {
                 ...airport,
                 status: getAirportStatus(airportId, activeEquipment),
@@ -354,48 +355,48 @@ const app = new Elysia()
     .get('/api/snmp/templates', async () => await db.getAllParsingConfigs())
 
     // --- PUBLIC PING TOOL ---
-    .group('/api/ping', (app) => 
+    .group('/api/ping', (app) =>
         app
             .post('/start', async ({ body, set }) => {
                 const { ip, interval } = body as any;
-                
+
                 if (!ip || !interval) {
                     set.status = 400;
                     return { error: 'IP dan interval wajib diisi' };
                 }
-                
+
                 const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
                 if (!ipRegex.test(ip)) {
                     set.status = 400;
                     return { error: 'Format IP tidak valid' };
                 }
-                
+
                 if (interval < 1 || interval > 60) {
                     set.status = 400;
                     return { error: 'Interval harus antara 1-60 detik' };
                 }
-                
+
                 // Clear existing
                 if (state.ping.interval) {
                     clearInterval(state.ping.interval);
                     state.ping.results = [];
                 }
-                
+
                 state.ping.currentIp = ip;
                 const intervalMs = interval * 1000;
-                
+
                 try {
                     // Initial ping
                     const { ping } = require('./utils/network');
                     const result = await ping.promise.probe(ip, { timeout: 5 });
-                    
+
                     state.ping.results.push({
                         time: new Date().toISOString(),
                         alive: result.alive,
                         responseTime: result.time,
                         host: ip
                     });
-                    
+
                     // Start interval
                     state.ping.interval = setInterval(async () => {
                         try {
@@ -406,7 +407,7 @@ const app = new Elysia()
                                 responseTime: pResult.time || 0,
                                 host: ip
                             });
-                            
+
                             if (state.ping.results.length > state.ping.maxResults) {
                                 state.ping.results = state.ping.results.slice(-state.ping.maxResults);
                             }
@@ -414,8 +415,8 @@ const app = new Elysia()
                             console.error('[Ping] Error:', e.message);
                         }
                     }, intervalMs);
-                    
-                    return { 
+
+                    return {
                         message: `Ping ke ${ip} setiap ${interval} detik dimulai`,
                         ip: ip,
                         interval: interval,
@@ -431,13 +432,13 @@ const app = new Elysia()
                 if (state.ping.interval) {
                     clearInterval(state.ping.interval);
                     state.ping.interval = null;
-                    
+
                     const result = {
                         message: 'Ping dihentikan',
                         ip: state.ping.currentIp,
                         results: state.ping.results.length
                     };
-                    
+
                     state.ping.currentIp = null;
                     return result;
                 }
@@ -465,7 +466,7 @@ const app = new Elysia()
             .get('/', async ({ query, set }) => {
                 try {
                     const { airportId, branchId, category, isActive, page = 1, limit = 1000, includeData } = query;
-                    
+
                     const result = await db.getAllEquipment({
                         branchId: branchId ? parseInt(branchId as string) : undefined,
                         category: (category as string) || undefined,
@@ -519,11 +520,11 @@ const app = new Elysia()
                     const b = body as any;
                     const branchId = b.branchId || b.airportId;
                     const ipAddress = b.ipAddress || (b.snmpConfig && b.snmpConfig.ip);
-                    
+
                     const newEquipment = await db.createEquipment({
                         ...b,
-                        branchId: parseInt(branchId),
-                        airportId: b.airportId ? parseInt(b.airportId) : undefined,
+                        branchId: branchId ? parseInt(branchId.toString()) : undefined,
+                        airportId: b.airportId ? parseInt(b.airportId.toString()) : undefined,
                         ipAddress
                     });
                     set.status = 201;
@@ -532,21 +533,21 @@ const app = new Elysia()
                     set.status = 500;
                     return { message: error.message };
                 }
-            }, { beforeHandle: authorize(['admin', 'user_pusat', 'teknisi_cabang']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat', 'teknisi_cabang']) })
             // Update Equipment
             .put('/:id', async ({ params, body, set }) => {
                 try {
                     const b = body as any;
                     const branchId = b.branchId || b.airportId;
                     const ipAddress = b.ipAddress || (b.snmpConfig && b.snmpConfig.ip);
-                    
+
                     const updated = await db.updateEquipment(params.id, {
                         ...b,
-                        branchId: branchId ? parseInt(branchId) : undefined,
-                        airportId: b.airportId ? parseInt(b.airportId) : undefined,
+                        branchId: branchId ? parseInt(branchId.toString()) : undefined,
+                        airportId: b.airportId ? parseInt(b.airportId.toString()) : undefined,
                         ipAddress
                     });
-                    
+
                     if (!updated) {
                         set.status = 404;
                         return { message: 'Equipment not found' };
@@ -556,7 +557,7 @@ const app = new Elysia()
                     set.status = 500;
                     return { message: error.message };
                 }
-            }, { beforeHandle: authorize(['admin', 'user_pusat', 'teknisi_cabang']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat', 'teknisi_cabang']) })
             // Delete Equipment
             .delete('/:id', async ({ params, set }) => {
                 try {
@@ -566,15 +567,15 @@ const app = new Elysia()
                     set.status = 500;
                     return { message: error.message };
                 }
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             // Ping Equipment (Multi-tier)
             .get('/:id/ping', async ({ params, set }) => {
                 const { pingTiered } = require('./utils/network');
                 try {
                     const result = await pingTiered(params.id);
                     if (!result.success && result.tier === 0) { // Error
-                         set.status = 500;
-                         return result;
+                        set.status = 500;
+                        return result;
                     }
                     return result;
                 } catch (error: any) {
@@ -591,7 +592,7 @@ const app = new Elysia()
                         set.status = 400;
                         return { success: false, message: 'Invalid IP address format' };
                     }
-                    
+
                     const result = await pingHost(ip, 3);
                     return {
                         success: result.alive,
@@ -608,23 +609,23 @@ const app = new Elysia()
     )
 
     // --- SUP CATEGORY ROUTES ---
-    .group('/api/sup-categories', (app) => 
+    .group('/api/sup-categories', (app) =>
         app.get('/', async () => await db.getAllSupCategories())
-           .get('/:category', async ({ params }) => await db.getSupCategoriesByCategory(params.category))
-           .put('/:category', async ({ params, body }) => await db.updateSupCategory(params.category, (body as any).sub_categories))
+            .get('/:category', async ({ params }) => await db.getSupCategoriesByCategory(params.category))
+            .put('/:category', async ({ params, body }) => await db.updateSupCategory(params.category, (body as any).sub_categories))
     )
 
     // --- EQUIPMENT OTENTICATION ROUTES ---
     .group('/api/otentication', (app) =>
         app.get('/:equipmentId', async ({ params }) => await db.getOtenticationByEquipment(params.equipmentId))
-           .post('/', async ({ body }) => await db.createOtentication(body as any))
-           .delete('/:equipmentId', async ({ params }) => await db.deleteOtenticationByEquipment(params.equipmentId))
+            .post('/', async ({ body }) => await db.createOtentication(body as any))
+            .delete('/:equipmentId', async ({ params }) => await db.deleteOtenticationByEquipment(params.equipmentId))
     )
 
     // --- LIMITATION CONFIG ROUTES ---
     .group('/api/limitations', (app) =>
         app.get('/:equipmentId', async ({ params }) => await db.getLimitationsByEquipment(params.equipmentId))
-           .put('/', async ({ body }) => await db.updateLimitation(body as any))
+            .put('/', async ({ body }) => await db.updateLimitation(body as any))
     )
 
     // --- AIRPORT ROUTES ---
@@ -642,7 +643,7 @@ const app = new Elysia()
                 const item = await db.createAirport(body);
                 set.status = 201;
                 return item;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .put('/:id', async ({ params, body, set }) => {
                 const updated = await db.updateAirport(params.id, body);
                 if (!updated) {
@@ -650,57 +651,57 @@ const app = new Elysia()
                     return { success: false, message: 'Airport not found' };
                 }
                 return updated;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .delete('/:id', async ({ params }) => {
                 await db.deleteAirport(params.id);
                 return { success: true, message: 'Airport deleted' };
-            }, { beforeHandle: authorize(['admin']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
             .get('/gateway-status', async ({ query: { airportId }, set }) => {
-              try {
-                if (!airportId) {
-                  set.status = 400;
-                  return { success: false, error: 'airportId query parameter required' };
+                try {
+                    if (!airportId) {
+                        set.status = 400;
+                        return { success: false, error: 'airportId query parameter required' };
+                    }
+                    const airportIdNum = parseInt(airportId as string);
+                    const airport = await db.getAirportById(airportIdNum);
+
+                    if (!airport) {
+                        set.status = 404;
+                        return {
+                            success: false,
+                            error: 'Airport not found',
+                            gatewayHealthy: false
+                        };
+                    }
+
+                    const gatewayIp = airport.ipBranch || airport.ip_branch;
+
+                    if (!gatewayIp || gatewayIp.trim() === '') {
+                        return {
+                            success: true,
+                            gatewayHealthy: false,
+                            ip: null,
+                            message: 'No gateway IP configured for this airport',
+                            responseTime: null
+                        };
+                    }
+
+                    // Ping gateway IP (timeout 3s)
+                    const ping = require('ping');
+                    const result = await ping.promise.probe(gatewayIp, { timeout: 3 });
+
+                    const gatewayHealthy = result.alive;
+
+                    return {
+                        success: true,
+                        gatewayHealthy,
+                        ip: gatewayIp,
+                        responseTime: gatewayHealthy ? result.time : null,
+                    };
+                } catch (error: any) {
+                    if (!set.status || set.status === 200) set.status = 500;
+                    return { success: false, error: error.message };
                 }
-                const airportIdNum = parseInt(airportId as string);
-                const airport = await db.getAirportById(airportIdNum);
-                
-                if (!airport) {
-                  set.status = 404;
-                  return { 
-                    success: false, 
-                    error: 'Airport not found',
-                    gatewayHealthy: false 
-                  };
-                }
-                
-                const gatewayIp = airport.ipBranch || airport.ip_branch;
-                
-                if (!gatewayIp || gatewayIp.trim() === '') {
-                  return { 
-                    success: true,
-                    gatewayHealthy: false,
-                    ip: null,
-                    message: 'No gateway IP configured for this airport',
-                    responseTime: null
-                  };
-                }
-                
-                // Ping gateway IP (timeout 3s)
-                const ping = require('ping');
-                const result = await ping.promise.probe(gatewayIp, { timeout: 3 });
-                
-                const gatewayHealthy = result.alive;
-                
-                return {
-                  success: true,
-                  gatewayHealthy,
-                  ip: gatewayIp,
-                  responseTime: gatewayHealthy ? result.time : null,
-                };
-              } catch (error: any) {
-                if (!set.status || set.status === 200) set.status = 500;
-                return { success: false, error: error.message };
-              }
             })
     )
 
@@ -729,7 +730,7 @@ const app = new Elysia()
                     set.status = 500;
                     return { message: error.message };
                 }
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .put('/:id', async ({ params, body, set }) => {
                 const updated = await db.updateSnmpTemplate(params.id, body);
                 if (!updated) {
@@ -737,7 +738,7 @@ const app = new Elysia()
                     return { message: 'Template not found' };
                 }
                 return updated;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .delete('/:id', async ({ params, set }) => {
                 const deleted = await db.deleteSnmpTemplate(params.id);
                 if (!deleted) {
@@ -745,7 +746,7 @@ const app = new Elysia()
                     return { message: 'Template not found' };
                 }
                 return { message: 'Template deleted' };
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
     )
 
     // --- SNMP TEST ROUTES (BACKWARD COMPATIBILITY) ---
@@ -770,13 +771,13 @@ const app = new Elysia()
                         set.status = 404;
                         return { message: 'Equipment not found' };
                     }
-                    
+
                     const config = item.snmpConfig || item.snmp_config;
                     if (!config || !config.enabled) {
                         set.status = 404;
                         return { message: 'SNMP not configured for this equipment' };
                     }
-                    
+
                     const { parsedData: data, status, triggeredParameters } = await fetchAndParseData(item);
                     const enrichedData = { ...data, _status: status, _triggered: triggeredParameters || [] };
                     state.snmpDataCache[item.id] = enrichedData;
@@ -822,7 +823,7 @@ const app = new Elysia()
                 });
                 set.status = 201;
                 return station;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .put('/stations/:id', async ({ params, body, set }) => {
                 const b = body as any;
                 const station = await db.updateSurveillanceStation(params.id, {
@@ -837,11 +838,11 @@ const app = new Elysia()
                     return { message: 'Station not found' };
                 }
                 return station;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .delete('/stations/:id', async ({ params }) => {
                 await db.deleteSurveillanceStation(params.id);
                 return { message: 'Station deleted' };
-            }, { beforeHandle: authorize(['admin']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
             .get('/radar/:stationId', async ({ params, query }) => {
                 const { limit = 100 } = query;
                 return await db.getRadarTargets(parseInt(params.stationId), {
@@ -859,10 +860,10 @@ const app = new Elysia()
                 const stationList = Array.isArray(stations) ? stations : [];
                 const radarStations = stationList.filter((s: any) => s.type === 'radar');
                 const adsbStations = stationList.filter((s: any) => s.type === 'adsb');
-                
+
                 const radarTargets = await db.getRadarTargets(1, { limit: 1000 });
                 const adsbAircraft = await db.getAdsbAircraft({ limit: 1000 });
-                
+
                 return {
                     radar: {
                         totalStations: radarStations.length,
@@ -884,10 +885,10 @@ const app = new Elysia()
                     set.status = 404;
                     return { message: 'Station not found' };
                 }
-                
+
                 let targets = [];
                 let receiverStatus = 'disconnected';
-                
+
                 if (radarReceiver) {
                     try {
                         const result = await radarReceiver.fetchData(station.id);
@@ -897,11 +898,11 @@ const app = new Elysia()
                         console.error('[API] Error fetching from radar receiver:', err.message);
                     }
                 }
-                
+
                 if (targets.length === 0) {
                     targets = await db.getRadarTargets(station.id, { limit: 50 });
                 }
-                
+
                 return {
                     station,
                     targets,
@@ -932,7 +933,7 @@ const app = new Elysia()
                 const threshold = await db.createThreshold({ ...(body as any), equipment_id: parseInt(params.id) });
                 set.status = 201;
                 return threshold;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .put('/:thresholdId', async ({ params, body, set }) => {
                 const updated = await db.updateThreshold(params.thresholdId, body);
                 if (!updated) {
@@ -940,11 +941,11 @@ const app = new Elysia()
                     return { message: 'Threshold not found' };
                 }
                 return updated;
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
             .delete('/:thresholdId', async ({ params }) => {
                 await db.deleteThreshold(params.thresholdId);
                 return { message: 'Threshold deleted' };
-            }, { beforeHandle: authorize(['admin', 'user_pusat']) })
+            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
     )
 
     // --- PARSER ROUTES ---
@@ -986,6 +987,74 @@ const app = new Elysia()
             .get('/device-traffic', async () => ({ success: true, data: await networkMonitor.getDeviceTraffic() }))
     })
 
+    // --- CONFIGURATION MANAGEMENT ROUTES (Issue #12) ---
+    .group('/api/config', (app) =>
+        app.use(authenticate)
+            // Limitations
+            .get('/limitations', async () => await db.getAllLimitations())
+            .post('/limitations', async ({ body, set }) => {
+                const item = await db.createLimitation(body as any);
+                set.status = 201;
+                return item;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .put('/limitations/:id', async ({ params, body, set }) => {
+                const updated = await db.updateLimitation(params.id, body);
+                if (!updated) { set.status = 404; return { message: 'Not found' }; }
+                return updated;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .delete('/limitations/:id', async ({ params }) => {
+                await db.deleteLimitation(params.id);
+                return { message: 'Deleted' };
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+
+            // Authentications (IP Components)
+            .get('/authentications', async () => await db.getAllOtentication())
+            .post('/authentications', async ({ body, set }) => {
+                const item = await db.createOtentication(body as any);
+                set.status = 201;
+                return item;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .put('/authentications/:id', async ({ params, body, set }) => {
+                const updated = await db.updateOtentication(params.id, body);
+                if (!updated) { set.status = 404; return { message: 'Not found' }; }
+                return updated;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .delete('/authentications/:id', async ({ params }) => {
+                await db.deleteOtentication(params.id);
+                return { message: 'Deleted' };
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+
+            // Parsing Templates
+            .get('/parsings', async () => await db.getAllParsingConfigs())
+            .post('/parsings', async ({ body, set }) => {
+                const item = await db.createParsingConfig(body as any);
+                set.status = 201;
+                return item;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .put('/parsings/:id', async ({ params, body, set }) => {
+                const updated = await db.updateParsingConfig(params.id, body);
+                if (!updated) { set.status = 404; return { message: 'Not found' }; }
+                return updated;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .delete('/parsings/:id', async ({ params }) => {
+                await db.deleteParsingConfig(params.id);
+                return { message: 'Deleted' };
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+
+            // Categories & Sup Categories
+            .get('/categories', async () => await db.getAllCategories())
+            .get('/sup-categories', async () => await db.getAllSupCategories())
+            .post('/sup-categories', async ({ body, set }) => {
+                const item = await db.createSupCategory(body as any);
+                set.status = 201;
+                return item;
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+            .delete('/sup-categories/:id', async ({ params }) => {
+                await db.deleteSupCategory(params.id);
+                return { message: 'Deleted' };
+            }, { beforeHandle: authorize(['superadmin', 'admin']) })
+    )
+
     // --- PACKET SNIFFER ROUTES ---
     .group('/api/sniffer', (app) => {
         const packetSniffer = require('./network/sniffer');
@@ -1016,34 +1085,15 @@ const app = new Elysia()
     })
 
     // Root Dashboard Serving (Direct Bun file serving via Response)
-    .get('/', async () => {
-        try {
-            const path = require('path');
-            const indexPath = path.resolve(process.cwd(), 'public', 'index.html');
-            console.log(`[DEBUG-ROUTER] Serving dashboard from: ${indexPath}`);
-            const Bun = (globalThis as any).Bun;
-            if (!Bun) throw new Error('Bun runtime not found');
-            return new Response(Bun.file(indexPath), { headers: { 'Content-Type': 'text/html' } });
-        } catch (e: any) {
-            console.error(`[DEBUG-ROUTER] Failed to serve root: ${e.message}`);
-            return new Response(`Server Dashboard Error: ${e.message}`, { status: 500 });
-        }
-    })
-    .get('/index.html', async () => {
-        const path = require('path');
-        const Bun = (globalThis as any).Bun;
-        return new Response(Bun.file(path.resolve(process.cwd(), 'public', 'index.html')), { headers: { 'Content-Type': 'text/html' } });
-    })
     .get('/favicon.ico', () => (globalThis as any).Bun?.file('public/icon.png'))
     .state('simulationMode', true)
-    
+
     .get('/api/test-chain', () => {
         console.log('[DEBUG-ROUTER] Hit /api/test-chain');
         return { chain: 'complete', timestamp: new Date().toISOString() };
     })
-    
+
     // Final Static Files Fallback
-    .use(staticPlugin({ assets: 'public', prefix: '' }))
     .listen(PORT);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
@@ -1052,7 +1102,7 @@ console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.por
 async function startServices() {
     try {
         console.log('[SYSTEM] Initializing core services...');
-        
+
         // 1. Initial Seeding (DISABLED)
         // await seedUpsJakarta();
 
@@ -1064,7 +1114,7 @@ async function startServices() {
         // const collector = new DataCollectorScheduler(new EquipmentService(db));
         // // Run every 2 minutes for stability
         // setInterval(() => collector.collectAll(), 120000);
-        
+
         // // Initial run after a short delay
         // setTimeout(() => collector.collectAll(), 10000);
 
