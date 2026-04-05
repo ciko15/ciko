@@ -1372,23 +1372,8 @@ tbody tr:hover {
   transition: all var(--transition-speed);
 }
 
-.btn-edit {
-  background: var(--accent-primary);
-  color: white;
-}
+/* Consolidated Action Buttons are now under .btn-view, .btn-edit, .btn-delete in the action section below */
 
-.btn-edit:hover {
-  background: #1d4ed8;
-}
-
-.btn-delete {
-  background: var(--accent-danger);
-  color: white;
-}
-
-.btn-delete:hover {
-  background: #dc2626;
-}
 
 /* Status Badge */
 .status-badge {
@@ -2650,17 +2635,57 @@ tr.child-airport {
   border: none;
   padding: 8px;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 6px; /* User requested 6px square-ish */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
   margin: 0 2px;
+  width: 34px; /* Ensure squareness */
+  height: 34px;
 }
 
-.btn-icon.btn-view { color: #3b82f6; }
-.btn-icon.btn-edit { color: #10b981; }
-.btn-icon.btn-delete { color: #ef4444; }
+/* Base style for all action buttons */
+.btn-view, .btn-edit, .btn-delete {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white !important;
+  font-size: 16px; /* Icon size approx 16-18px */
+}
+
+.btn-view i, .btn-edit i, .btn-delete i {
+  font-size: 16px;
+}
+
+/* Detail Button (Green/Emerald) */
+.btn-view {
+  background: #28a745 !important;
+}
+
+/* Edit Button (Blue) */
+.btn-edit {
+  background: #007bff !important;
+}
+
+/* Delete Button (Red) */
+.btn-delete {
+  background: #dc3545 !important;
+}
+
+/* Hover effects */
+.btn-view:hover, .btn-edit:hover, .btn-delete:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
 
 .btn-icon:hover {
   background: var(--bg-secondary);
@@ -2849,20 +2874,8 @@ tr.child-airport {
   background-color: #10b981;
 }
 
-/* View Button */
-.btn-view {
-  background: var(--accent-success);
-  color: white;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all var(--transition-speed);
-}
+/* Generic view button style replaced by specialized action button style */
 
-.btn-view:hover {
-  background: #059669;
-}
 
 /* Check Button */
 .btn-check {

@@ -157,8 +157,8 @@ function addParameterRow(data = {}) {
           <input type="number" step="0.1" name="alarmMax" value="${data.alarm_max || ''}">
         </div>
       </div>
-      <button type="button" class="btn-remove-param" onclick="this.parentElement.parentElement.remove()">
-        <i class="fas fa-times"></i>
+      <button type="button" class="btn-delete" title="Remove Parameter" onclick="this.parentElement.parentElement.remove()">
+        <i class="fas fa-trash"></i>
       </button>
     </div>
   `;
