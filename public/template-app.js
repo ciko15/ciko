@@ -4,7 +4,8 @@
  * Updated for JSON Storage Integration
  */
 
-authToken = localStorage.getItem('authToken');
+// Global state
+let authToken = localStorage.getItem('authToken');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /**
  * Global function called by config-nav.js
  */
-window.loadSnmpTemplates = async function() {
+window.loadSnmpTemplates = async function () {
   const tableBody = document.getElementById('templateTableBody');
   if (!tableBody) return;
 
@@ -169,7 +170,7 @@ function addParameterRow(data = {}) {
  */
 async function saveTemplate() {
   const idValue = document.getElementById('templateId').value;
-  
+
   const templateData = {
     name: document.getElementById('templateName').value,
     equipment_type: document.getElementById('templateEquipmentType').value,

@@ -39,16 +39,16 @@ function writeJson(filePath, data) {
 // --- AIRPORT CONFIG HELPERS ---
 function readAirportConfig() {
   const data = readJson(AIRPORT_CONFIG_PATH, null);
-  return data || { 
-      id: 1, 
-      name: 'Bandara Sentani', 
-      city: 'Jayapura', 
-      lat: -2.5768, 
-      lng: 140.5163, 
-      ipBranch: '172.19.16.1',
-      status: 'Normal',
-      totalEquipment: 3 
-    };
+  return data || {
+    id: 1,
+    name: 'Bandara Sentani',
+    city: 'Jayapura',
+    lat: -2.5768,
+    lng: 140.5163,
+    ipBranch: '172.19.16.1',
+    status: 'Normal',
+    totalEquipment: 3
+  };
 }
 
 function writeAirportConfig(data) {
@@ -110,24 +110,24 @@ async function deleteAirport(id) {
 async function getAllEquipment(filters = {}) {
   let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
   let filtered = [...equipmentList];
-  
+
   if (filters.category) {
     filtered = filtered.filter(e => e.category === filters.category);
   }
-  
+
   if (filters.airportId) {
     filtered = filtered.filter(e => e.airportId == filters.airportId);
   }
-  
+
   if (filters.isActive !== undefined && filters.isActive !== 'all') {
     const activeFilter = (filters.isActive === true || filters.isActive === 'true');
     filtered = filtered.filter(e => (e.isActive === true || e.isActive === 'true') === activeFilter);
   }
-  
+
   const page = filters.page || 1;
   const limit = filters.limit || 1000;
   const offset = (page - 1) * limit;
-  
+
   return {
     data: filtered.slice(offset, offset + limit),
     total: filtered.length,
@@ -163,9 +163,9 @@ async function getEquipmentById(id) {
 
 async function createEquipment(data) {
   let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
-  const newEquip = { 
-    ...data, 
-    id: Date.now(), 
+  const newEquip = {
+    ...data,
+    id: Date.now(),
     status: data.status || 'Normal',
     status_ops: data.status_ops || 'Normal',
     merk: data.merk || '-',
@@ -183,8 +183,8 @@ async function updateEquipment(id, data) {
   let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
   const index = equipmentList.findIndex(e => e.id == id);
   if (index !== -1) {
-    const updated = { 
-      ...equipmentList[index], 
+    const updated = {
+      ...equipmentList[index],
       ...data,
       lat: data.lat !== undefined ? parseFloat(data.lat) : equipmentList[index].lat,
       lng: data.lng !== undefined ? parseFloat(data.lng) : equipmentList[index].lng,
@@ -225,7 +225,7 @@ async function getParsingConfigById(id) {
 
 async function createParsingConfig(data) {
   let configs = readJson(PARSING_CONFIG_PATH);
-  const newCfg = { 
+  const newCfg = {
     id: data.id || `custom_${Date.now()}`,
     name: data.name,
     category: data.category || '',
@@ -267,10 +267,10 @@ async function getSnmpTemplateById(id) {
 
 async function createSnmpTemplate(data) {
   let templates = readJson(TEMPLATE_CONFIG_PATH);
-  const newTgl = { 
-    ...data, 
+  const newTgl = {
+    ...data,
     id: data.id || `custom_${Date.now()}`,
-    createdAt: new Date().toISOString() 
+    createdAt: new Date().toISOString()
   };
   templates.push(newTgl);
   writeJson(TEMPLATE_CONFIG_PATH, templates);
@@ -302,7 +302,28 @@ async function getAllSupCategories() {
 
 async function getSupCategoriesByCategory(category) {
   const data = readJson(SUP_CATEGORY_PATH);
+  if (!category) return data;
   return data.find(c => c.category === category) || { category, sub_categories: [] };
+}
+
+async function createSupCategory(data) {
+  let list = readJson(SUP_CATEGORY_PATH);
+  const newItem = {
+    id: Date.now(),
+    category: data.category,
+    sub_categories: data.sub_categories || []
+  };
+  list.push(newItem);
+  writeJson(SUP_CATEGORY_PATH, list);
+  return newItem;
+}
+
+async function deleteSupCategory(id) {
+  let data = readJson(SUP_CATEGORY_PATH);
+  // Support deletion by id or category name
+  const newList = data.filter(c => c.id != id && c.category !== id);
+  writeJson(SUP_CATEGORY_PATH, newList);
+  return true;
 }
 
 async function updateSupCategory(category, subCategories) {
@@ -318,6 +339,10 @@ async function updateSupCategory(category, subCategories) {
 }
 
 // --- EQUIPMENT OTENTICATION (IP COMPONENTS) ---
+async function getAllOtentication() {
+  return readJson(AUTH_CONFIG_PATH);
+}
+
 async function getOtenticationByEquipment(equipmentId) {
   const data = readJson(AUTH_CONFIG_PATH);
   return data.filter(a => a.equipt_id == equipmentId);
@@ -328,12 +353,29 @@ async function createOtentication(data) {
   const newItem = {
     id: Date.now() + Math.floor(Math.random() * 1000),
     name: data.name,
-    equipt_id: data.equipt_id,
+    equipt_id: data.equipt_id || null,
     ip_address: data.ip_address
   };
   authList.push(newItem);
   writeJson(AUTH_CONFIG_PATH, authList);
   return newItem;
+}
+
+async function updateOtentication(id, data) {
+  let list = readJson(AUTH_CONFIG_PATH);
+  const index = list.findIndex(a => a.id == id);
+  if (index !== -1) {
+    list[index] = { ...list[index], ...data };
+    writeJson(AUTH_CONFIG_PATH, list);
+    return list[index];
+  }
+  return null;
+}
+
+async function deleteOtentication(id) {
+  let list = readJson(AUTH_CONFIG_PATH);
+  const newList = list.filter(a => a.id != id);
+  writeJson(AUTH_CONFIG_PATH, newList);
 }
 
 async function deleteOtenticationByEquipment(equipmentId) {
@@ -343,33 +385,55 @@ async function deleteOtenticationByEquipment(equipmentId) {
 }
 
 // --- LIMITATION CONFIGS ---
-async function getLimitationsByEquipment(equipmentId) {
-  const data = readJson(LIMITATION_CONFIG_PATH);
-  return data.find(l => l.equipt_id == equipmentId) || {};
+async function getAllLimitations() {
+  return readJson(LIMITATION_CONFIG_PATH);
 }
 
-async function updateLimitation(data) {
+async function getLimitationsByEquipment(equipmentId) {
+  const equipment = await getEquipmentById(equipmentId);
+  if (!equipment || !equipment.sup_category) return {};
+
+  const data = readJson(LIMITATION_CONFIG_PATH);
+  // Find limitation by sup_category instead of equipt_id
+  return data.find(l => l.sup_category === equipment.sup_category) || {};
+}
+
+async function createLimitation(data) {
   let list = readJson(LIMITATION_CONFIG_PATH);
-  const index = list.findIndex(l => l.equipt_id == data.equipt_id);
   const item = {
-    id: data.id || Date.now(),
+    id: Date.now(),
     name: data.name,
     category: data.category,
-    equipt_id: data.equipt_id,
+    sup_category: data.sup_category,
     value: data.value,
+    value_type: data.value_type || 'numeric', // numeric, string, percent
     wlv: data.wlv,
     alv: data.alv,
     whv: data.whv,
-    ahv: data.ahv
+    ahv: data.ahv,
+    expected_value: data.expected_value || null
   };
-  
-  if (index !== -1) {
-    list[index] = item;
-  } else {
-    list.push(item);
-  }
+  list.push(item);
   writeJson(LIMITATION_CONFIG_PATH, list);
   return item;
+}
+
+async function updateLimitation(id, data) {
+  let list = readJson(LIMITATION_CONFIG_PATH);
+  const index = list.findIndex(l => l.id == id || l.equipt_id == id);
+
+  if (index !== -1) {
+    list[index] = { ...list[index], ...data };
+    writeJson(LIMITATION_CONFIG_PATH, list);
+    return list[index];
+  }
+  return null;
+}
+
+async function deleteLimitation(id) {
+  let list = readJson(LIMITATION_CONFIG_PATH);
+  const newList = list.filter(l => l.id != id);
+  writeJson(LIMITATION_CONFIG_PATH, newList);
 }
 
 // --- USERS ---
@@ -411,11 +475,11 @@ async function createEquipmentLog(data) {
 async function getEquipmentLogs(filters = {}) {
   let filtered = [...equipmentLogsDB];
   if (filters.equipmentId) filtered = filtered.filter(l => l.equipmentId == filters.equipmentId);
-  
+
   const page = filters.page || 1;
   const limit = filters.limit || 100;
   const offset = (page - 1) * limit;
-  
+
   return {
     data: filtered.slice(offset, offset + limit),
     pagination: { page, limit }
@@ -520,14 +584,22 @@ module.exports = {
   // Sup Categories
   getAllSupCategories,
   getSupCategoriesByCategory,
+  createSupCategory,
   updateSupCategory,
+  deleteSupCategory,
   // Equipment Otentication
+  getAllOtentication,
   getOtenticationByEquipment,
   createOtentication,
+  updateOtentication,
+  deleteOtentication,
   deleteOtenticationByEquipment,
   // Limitation Configs
+  getAllLimitations,
   getLimitationsByEquipment,
+  createLimitation,
   updateLimitation,
+  deleteLimitation,
   // Categories
   getAllCategories,
   // Equipment Logs

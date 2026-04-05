@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "id": 1,
+    "name": "Full Services",
+    "category": "Communication",
+    "sup_category": "VHF A/G",
+    "value": "ok",
+    "value_type": "string",
+    "expected_value": "ok"
+  }
+]

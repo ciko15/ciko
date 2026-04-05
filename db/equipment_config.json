@@ -2,7 +2,6 @@
   {
     "id": 101,
     "name": "DVOR Sentani",
-    "code": "NAV-DVOR-001",
     "category": "Navigation",
     "sup_category": "DVOR",
     "merk": "Maru",
@@ -22,9 +21,8 @@
   {
     "id": 102,
     "name": "VHF Ground-to-Air",
-    "code": "COM-VHF-001",
     "category": "Communication",
-    "status": "Warning",
+    "status": "Active",
     "lat": -2.578,
     "lng": 140.518,
     "airportId": 1,
@@ -32,12 +30,16 @@
     "snmpConfig": {
       "enabled": false
     },
-    "branchId": 1
+    "branchId": 1,
+    "sup_category": "VHF A/G",
+    "merk": "",
+    "type": "",
+    "status_ops": "Normal",
+    "description": ""
   },
   {
     "id": 103,
     "name": "Radar MSSR",
-    "code": "SURV-MSSR-001",
     "category": "Surveillance",
     "status": "Normal",
     "lat": -2.575,
@@ -51,7 +53,6 @@
   },
   {
     "name": "test",
-    "code": "sds-171",
     "category": "Data Processing",
     "airportId": 1,
     "status": "Normal",
@@ -64,7 +65,6 @@
   },
   {
     "name": "Auto-Airport Test",
-    "code": "TEST-001",
     "category": "Support",
     "airportId": 1,
     "status": "Normal",
