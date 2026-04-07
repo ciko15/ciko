@@ -17,6 +17,26 @@
     "id": 1775530650776,
     "name": "Source - Localizer",
     "equipt_id": "1775527260954",
-    "ip_address": "192.168.50.10"
+    "ip_address": "192.168.50.10",
+    "parsing_id": "dvor_maru_220",
+    "udp_port": "4001"
+  },
+  {
+    "id": 1775540662647,
+    "name": "TX 1",
+    "equipt_id": "1775111531489",
+    "ip_address": "192.168.1.11"
+  },
+  {
+    "id": 1775540678434,
+    "name": "TX 2",
+    "equipt_id": "1775111531489",
+    "ip_address": "192.168.1.12"
+  },
+  {
+    "id": 1775558761101,
+    "name": "RX 1",
+    "equipt_id": "1775111531489",
+    "ip_address": "192.168.1.13"
   }
 ]

@@ -134,3 +134,68 @@
   .config-nav-sidebar { min-width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); }
   .config-nav-list { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* File Picker Styles */
+.file-picker-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.file-item i {
+  width: 20px;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.file-item.directory i {
+  color: #fbbf24;
+}
+
+.file-item.file i {
+  color: #60a5fa;
+}
+
+.file-item .file-name {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.file-picker-breadcrumb {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--accent-primary);
+}
+
+.file-picker-breadcrumb:hover {
+  text-decoration: underline;
+}
+
+.file-picker-breadcrumb::after {
+  content: '/';
+  margin: 0 5px;
+  color: var(--text-muted);
+  text-decoration: none !important;
+}
+
