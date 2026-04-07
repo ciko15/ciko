@@ -1,22 +1,58 @@
 [
   {
     "category": "Communication",
-    "sub_categories": ["VHF A/G", "VSCS", "HF", "VHF G/G", "DS", "VSAT", "Voice REC", "D-ATIS"]
+    "sub_categories": [
+      "VHF A/G",
+      "VSCS",
+      "HF",
+      "VHF G/G",
+      "DS",
+      "VSAT",
+      "Voice REC",
+      "D-ATIS"
+    ]
   },
   {
     "category": "Navigation",
-    "sub_categories": ["DVOR", "DME", "ILS-TDME", "ILS-LLZ", "ILS-GP", "ILS-IM", "ILS-MM", "ILS-OM", "NDB", "GNSS", "MLS", "GBAS"]
+    "sub_categories": [
+      "DVOR",
+      "DME",
+      "ILS-TDME",
+      "ILS-LLZ",
+      "ILS-GP",
+      "ILS-IM",
+      "ILS-MM",
+      "ILS-OM",
+      "NDB",
+      "GNSS",
+      "MLS",
+      "GBAS"
+    ]
   },
   {
     "category": "Surveillance",
-    "sub_categories": ["RADAR", "ADSB", "ADSC", "MLAT"]
+    "sub_categories": [
+      "RADAR",
+      "ADSB",
+      "ADSC",
+      "MLAT"
+    ]
   },
   {
     "category": "Data Processing",
-    "sub_categories": ["ATCAS", "AMSC", "AMHS", "ASMGCS"]
+    "sub_categories": [
+      "ATCAS",
+      "AMSC",
+      "AMHS",
+      "ASMGCS"
+    ]
   },
   {
     "category": "Support",
-    "sub_categories": ["G-LLZ", "G-RADAR", "G-OPS", "UPS", "GENSET"]
+    "sub_categories": [
+      "SHELTER",
+      "UPS",
+      "GENSET"
+    ]
   }
 ]

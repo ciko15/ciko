@@ -106,6 +106,126 @@ class FileLogger {
         
         return files.slice(0, 10); // Last 10 files
     }
+
+    /**
+     * Get all log entries across all files with pagination
+     * Sorts by timestamp descending
+     */
+    async getHistoryLogs(options = {}) {
+        const { page = 1, limit = 50, search = '', startDate = null, endDate = null } = options;
+        const allEntries = [];
+        
+        try {
+            // 1. Get all YYYY-MM folders, sorted descending
+            if (!fs.existsSync(this.baseDir)) return { data: [], total: 0 };
+            
+            const monthFolders = fs.readdirSync(this.baseDir)
+                .filter(f => /^\d{4}-\d{2}$/.test(f))
+                .sort((a, b) => b.localeCompare(a));
+            
+            for (const month of monthFolders) {
+                const monthPath = path.join(this.baseDir, month);
+                const dayFolders = fs.readdirSync(monthPath)
+                    .filter(f => /^\d{2}$/.test(f))
+                    .sort((a, b) => b.localeCompare(a));
+                
+                for (const day of dayFolders) {
+                    const dayPath = path.join(monthPath, day);
+                    const files = fs.readdirSync(dayPath)
+                        .filter(f => f.endsWith('.log'))
+                        .sort((a, b) => {
+                            // Extract hour for sorting if possible
+                            const hA = a.split('_')[1] || '00';
+                            const hB = b.split('_')[1] || '00';
+                            return hB.localeCompare(hA);
+                        });
+                    
+                    for (const file of files) {
+                        const filePath = path.join(dayPath, file);
+                        const content = fs.readFileSync(filePath, 'utf8');
+                        const lines = content.split(os.EOL).filter(l => l.trim());
+                        
+                        for (const line of lines) {
+                            try {
+                                const entry = JSON.parse(line);
+                                
+                                // Apply filters
+                                if (search && !entry.equipmentName?.toLowerCase().includes(search.toLowerCase()) && 
+                                    !entry.status?.toLowerCase().includes(search.toLowerCase())) {
+                                    continue;
+                                }
+                                
+                                if (startDate && new Date(entry.timestamp) < new Date(startDate)) continue;
+                                if (endDate && new Date(entry.timestamp) > new Date(endDate)) continue;
+                                
+                                allEntries.push(entry);
+                                
+                                // If we have enough for the current page + next buffer, we could stop
+                                // but for correct sorting across files, we need more.
+                                // Optimization: Only read enough files to satisfy page/limit if possible.
+                            } catch (e) { /* ignore malformed lines */ }
+                        }
+                    }
+                    
+                    // Optimization: if we have enough entries and we've processed a whole day, 
+                    // and we are sorting by date, we can probably stop if we don't need accurate total count.
+                    // But the user wants "tampilan data dari yang paling akhir", so we need to sort all entries.
+                    if (allEntries.length > 2000) break; // Limit total scan for performance
+                }
+                if (allEntries.length > 2000) break;
+            }
+            
+            // 2. Final sort
+            allEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            // 3. Paginate
+            const total = allEntries.length;
+            const start = (page - 1) * limit;
+            const data = allEntries.slice(start, start + limit);
+            
+            return { data, total };
+        } catch (error) {
+            console.error('[FILELOG] getHistoryLogs error:', error.message);
+            return { data: [], total: 0 };
+        }
+    }
+
+    /**
+     * Cleanup folders older than 3 months
+     */
+    async cleanupOldLogs() {
+        console.log('[FILELOG] Starting automated cleanup...');
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth(); // 0-11
+        
+        // Calculate the threshold (3 months ago)
+        const thresholdDate = new Date(year, month - 3, 1);
+        const thresholdStr = thresholdDate.toISOString().slice(0, 7); // YYYY-MM
+        
+        try {
+            if (!fs.existsSync(this.baseDir)) return;
+            
+            const monthFolders = fs.readdirSync(this.baseDir)
+                .filter(f => /^\d{4}-\d{2}$/.test(f));
+            
+            let deletedCount = 0;
+            for (const folder of monthFolders) {
+                if (folder < thresholdStr) {
+                    const fullPath = path.join(this.baseDir, folder);
+                    console.log(`[FILELOG] Deleting old log directory: ${folder}`);
+                    fs.rmSync(fullPath, { recursive: true, force: true });
+                    deletedCount++;
+                }
+            }
+            
+            console.log(`[FILELOG] Cleanup complete. Deleted ${deletedCount} folders.`);
+            return deletedCount;
+        } catch (error) {
+            console.error('[FILELOG] cleanupOldLogs error:', error.message);
+            return 0;
+        }
+    }
 }
 
 module.exports = new FileLogger();

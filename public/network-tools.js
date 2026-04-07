@@ -423,35 +423,40 @@ function generateHexDump(packet) {
 // Clear captured packets
 async function clearCapture() {
   try {
-    if (confirm('Clear all captured packets?')) {
-      capturedPackets = [];
-      filteredPackets = [];
-      packetCounter = 0;
-      
-      const tbody = document.getElementById('packetListBody');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No packets captured. Start capture to begin.</td></tr>';
-      }
-      
-      const detailsContent = document.getElementById('packetDetailsContent');
-      if (detailsContent) {
-        detailsContent.innerHTML = '<div class="empty-state">Select a packet to view details</div>';
-      }
-      
-      const hexContent = document.getElementById('hexViewerContent');
-      if (hexContent) {
-        hexContent.innerHTML = '<div class="empty-state">Select a packet to view hex data</div>';
-      }
-      
-      updatePacketCount();
-      addLogEntry('System', 'All packets cleared', 'info');
-      
-      // Clear on backend
-      await fetch('/api/sniffer/clear', { 
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
+    const confirmed = await showConfirm(
+      'Kosongkan Logs?', 
+      'Apakah Anda yakin ingin menghapus semua tangkapan log?',
+      { type: 'warning', confirmText: 'Kosongkan' }
+    );
+    if (!confirmed) return;
+
+    capturedPackets = [];
+    filteredPackets = [];
+    packetCounter = 0;
+    
+    const tbody = document.getElementById('packetListBody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No packets captured. Start capture to begin.</td></tr>';
     }
+    
+    const detailsContent = document.getElementById('packetDetailsContent');
+    if (detailsContent) {
+      detailsContent.innerHTML = '<div class="empty-state">Select a packet to view details</div>';
+    }
+    
+    const hexContent = document.getElementById('hexViewerContent');
+    if (hexContent) {
+      hexContent.innerHTML = '<div class="empty-state">Select a packet to view hex data</div>';
+    }
+    
+    updatePacketCount();
+    addLogEntry('System', 'All packets cleared', 'info');
+    
+    // Clear on backend
+    await fetch('/api/sniffer/clear', { 
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
   } catch (error) {
     console.error('[Network Tools] Clear capture error:', error);
     addLogEntry('Error', `Clear failed: ${error.message}`, 'error');
@@ -673,43 +678,13 @@ function generateSampleHexData(length) {
   return hex.substring(0, length * 2);
 }
 
-// Clear captured packets
-function clearCapture() {
-  try {
-    if (confirm('Clear all captured packets?')) {
-      capturedPackets = [];
-      filteredPackets = [];
-      packetCounter = 0;
-      
-      const tbody = document.getElementById('packetListBody');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No packets captured. Click "Start Capture" to begin.</td></tr>';
-      }
-      
-      const detailsContent = document.getElementById('packetDetailsContent');
-      if (detailsContent) {
-        detailsContent.innerHTML = '<div class="empty-state">Select a packet to view details</div>';
-      }
-      
-      const hexContent = document.getElementById('hexViewerContent');
-      if (hexContent) {
-        hexContent.innerHTML = '<div class="empty-state">Select a packet to view hex data</div>';
-      }
-      
-      updatePacketCount();
-      addLogEntry('System', 'All packets cleared', 'info');
-    }
-  } catch (error) {
-    console.error('[Network Tools] Clear capture error:', error);
-    addLogEntry('Error', `Clear failed: ${error.message}`, 'error');
-  }
-}
+
 
 // Export packets to JSON/CSV/XML/PCAP
 async function exportPackets() {
   try {
     if (capturedPackets.length === 0) {
-      alert('No packets to export');
+      showToast('No packets to export', 'warning');
       return;
     }
 

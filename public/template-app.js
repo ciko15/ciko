@@ -214,12 +214,12 @@ async function saveTemplate() {
 
     if (!response.ok) throw new Error('Failed to save template');
 
-    alert(`Template ${idValue ? 'updated' : 'created'} successfully!`);
+    showToast(`Template ${idValue ? 'updated' : 'created'} successfully!`, 'success');
     closeTemplateModal();
     window.loadSnmpTemplates();
   } catch (error) {
     console.error('Error saving template:', error);
-    alert('Error saving template: ' + error.message);
+    showToast('Error saving template: ' + error.message, 'error');
   }
 }
 
@@ -272,7 +272,7 @@ window.viewTemplate = async (id) => {
 
     document.getElementById('templateDetailModal').classList.remove('hidden');
   } catch (error) {
-    alert('Error: ' + error.message);
+    showToast('Error: ' + error.message, 'error');
   }
 };
 
@@ -302,25 +302,30 @@ window.editTemplate = async (id) => {
     (template.parameters || []).forEach(p => addParameterRow(p));
 
   } catch (error) {
-    alert('Error: ' + error.message);
+    showToast('Error: ' + error.message, 'error');
   }
 };
 
 /**
  * Delete logic
  */
-window.deleteTemplate = async (id) => {
-  if (!confirm('Are you sure you want to delete this template?')) return;
+window.deleteSnmpTemplate = async function (id) {
+  const confirmed = await showConfirm(
+    'Hapus Template?', 
+    'Are you sure you want to delete this template?',
+    { type: 'danger', confirmText: 'Hapus' }
+  );
+  if (!confirmed) return;
   try {
     const response = await fetch(`${API_URL}/templates/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${authToken}` }
     });
     if (!response.ok) throw new Error('Delete failed');
-    alert('Template deleted');
+    showToast('Template deleted', 'success');
     window.loadSnmpTemplates();
   } catch (error) {
-    alert('Error: ' + error.message);
+    showToast('Error: ' + error.message, 'error');
   }
 };
 

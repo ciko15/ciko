@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "id": 1775480016777,
+    "name": "Validation Source",
+    "equipt_id": "101",
+    "ip_address": "192.168.10.10"
+  },
+  {
+    "id": 1775529754767,
+    "name": "TX 1",
+    "equipt_id": "1775529728876",
+    "ip_address": "192.168.1.11",
+    "parsing_id": "dvor_maru_220",
+    "udp_port": "4001"
+  },
+  {
+    "id": 1775530650776,
+    "name": "Source - Localizer",
+    "equipt_id": "1775527260954",
+    "ip_address": "192.168.50.10"
+  }
+]

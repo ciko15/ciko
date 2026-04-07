@@ -3,6 +3,23 @@
     "id": "dvor_maru_220",
     "name": "DVOR MARU 220",
     "category": "Navigation",
-    "files": "/public/parsers/asterix.js"
+    "files": "/src/parsers/asterix.js",
+    "configId": "dvor_maru_220",
+    "configType": "parsing",
+    "updatedAt": "2026-04-06T03:35:17.534Z"
+  },
+  {
+    "id": "custom_1775446808830",
+    "name": "dme maru 310/320",
+    "category": "Navigation",
+    "files": "/src/parsers/dme_maru_310_320.js",
+    "createdAt": "2026-04-06T03:40:08.830Z"
+  },
+  {
+    "id": "custom_1775512889323",
+    "name": "RADAR",
+    "category": "Surveillance",
+    "files": "/src/parsers/asterix.js",
+    "createdAt": "2026-04-06T22:01:29.323Z"
   }
 ]
