@@ -26,6 +26,8 @@ function getAuthHeaders() {
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   return headers;
 }
+window.getAuthHeaders = getAuthHeaders;
+
 
 // Global Toast Notification System
 function showToast(message, type = 'info') {
@@ -59,6 +61,8 @@ function showToast(message, type = 'info') {
     }
   }, 4000);
 }
+window.showToast = showToast;
+
 
 // Global Custom Confirmation Modal
 function showConfirm(title, message, options = {}) {
@@ -100,6 +104,8 @@ function showConfirm(title, message, options = {}) {
     overlay.onclick = (e) => { if (e.target === overlay) cleanup(false); };
   });
 }
+window.showConfirm = showConfirm;
+
 
 // Theme init
 function initTheme() {
@@ -132,30 +138,44 @@ function initMap() {
 
   // Define Base Layers
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxZoom: 22,
+    detectRetina: true,
     attribution: '© OpenStreetMap contributors'
   });
 
   const sentinelSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 22,
+    maxNativeZoom: 19,
+    detectRetina: true,
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  });
+
+  const googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    maxZoom: 22,
+    maxNativeZoom: 20,
+    detectRetina: true,
+    attribution: 'Map data &copy; Google'
   });
 
   const darkMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd',
-    maxZoom: 20
+    detectRetina: true,
+    maxZoom: 22
   });
 
   window.map = L.map('mapContainer', {
     center: sentaniCoords,
     zoom: 7,
+    maxZoom: 22,
     zoomControl: false,
-    layers: [sentinelSatellite] // Default Layer: Satellite
+    layers: [googleSatellite] // Default Layer: Google Satellite for better res
   });
 
   const baseMaps = {
     "Street View": osm,
     "Satellite View": sentinelSatellite,
+    "High-Res Satellite": googleSatellite,
     "Dark Mode Map": darkMap
   };
 
@@ -229,12 +249,29 @@ window.enableMapPick = function (type) {
 
   modal.classList.remove('hidden');
 
+  // Base coords (Sentani)
+  let currentLat = -2.5768;
+  let currentLng = 140.5163;
+  
+  // Try to get current values from the form to center map
+  const prefix = type === 'airport' ? 'airport' : 'equipment';
+  const valLat = document.getElementById(prefix + 'Lat')?.value;
+  const valLng = document.getElementById(prefix + 'Lng')?.value;
+  
+  if (valLat && !isNaN(parseFloat(valLat))) currentLat = parseFloat(valLat);
+  if (valLng && !isNaN(parseFloat(valLng))) currentLng = parseFloat(valLng);
+
   // Initialize Map in Picker if needed
   if (!window.pickerMap) {
-    window.pickerMap = L.map('mapPickerContainer').setView([-2.5768, 140.5163], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+    window.pickerMap = L.map('mapPickerContainer', {
+      maxZoom: 22
+    }).setView([currentLat, currentLng], 15);
+
+    L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      maxZoom: 22,
+      maxNativeZoom: 20,
+      detectRetina: true,
+      attribution: 'Map data &copy; Google'
     }).addTo(window.pickerMap);
 
     window.pickerMap.on('click', function (e) {
@@ -251,16 +288,22 @@ window.enableMapPick = function (type) {
   } else {
     setTimeout(() => {
       window.pickerMap.invalidateSize();
+      window.pickerMap.setView([currentLat, currentLng], 15);
+      if (window.pickerMarker) {
+        window.pickerMarker.setLatLng([currentLat, currentLng]);
+      }
     }, 200);
   }
 
-  // Reset status
-  document.getElementById('pickedCoordsText').textContent = 'None (Click on map)';
-  document.getElementById('confirmLocationBtn').disabled = true;
-  if (window.pickerMarker) {
-    window.pickerMap.removeLayer(window.pickerMarker);
-    window.pickerMarker = null;
+  // Set initial marker and status
+  if (!window.pickerMarker && window.pickerMap) {
+    window.pickerMarker = L.marker([currentLat, currentLng], { draggable: true }).addTo(window.pickerMap);
+  } else if (window.pickerMarker) {
+    window.pickerMarker.setLatLng([currentLat, currentLng]);
   }
+
+  document.getElementById('pickedCoordsText').textContent = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+  document.getElementById('confirmLocationBtn').disabled = false;
 };
 
 // Confirm Location Logic
@@ -639,7 +682,7 @@ async function loadEquipmentMarkers() {
 
       // Auto-fit bounds if we have valid coordinates
       if (hasCoords) {
-        window.map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+        window.map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
       }
     }
   } catch (err) {
@@ -823,10 +866,11 @@ window.editEquipment = async function (id) {
     tbody.innerHTML = '';
 
     // Ensure authentications are loaded
-    if (authenticationsData.length === 0) await loadAuthentications();
+    if (!authenticationsData || authenticationsData.length === 0) await loadAuthentications();
 
-    // Filter authentications for this equipment
-    const mySources = authenticationsData.filter(auth => auth.equipt_id == item.id);
+    // Filter authentications for this equipment (robust comparison)
+    const mySources = (authenticationsData || []).filter(auth => String(auth.equipt_id) === String(item.id));
+    
     if (mySources.length > 0) {
       mySources.forEach(source => window.addDataSourceRow(source.id));
     }
@@ -859,6 +903,18 @@ window.viewEquipmentDetail = async function (id) {
     // Filter sources for this equipment (using loose equality for string/number id)
     const mySources = (authenticationsData || []).filter(auth => String(auth.equipt_id) === String(item.id));
     
+    const generalInfoHtml = `
+      <div class="detail-card">
+        <h4><i class="fas fa-info-circle"></i> General Information</h4>
+        <p><strong>Name:</strong> ${item.name}</p>
+        <p><strong>Category:</strong> ${item.category} / ${item.sup_category || '-'}</p>
+        <p><strong>Brand/Type:</strong> ${item.merk || '-'} / ${item.type || '-'}</p>
+        <p><strong>Status Operasional:</strong> <span class="status-badge ${item.status_ops || item.status}">${item.status_ops || item.status}</span></p>
+        <p><strong>Coordinate:</strong> ${item.lat}, ${item.lng}</p>
+        <p><strong>Description:</strong> ${item.description || '-'}</p>
+      </div>
+    `;
+
     let sourcesHtml = '';
     if (mySources.length > 0) {
       sourcesHtml = `
@@ -902,49 +958,67 @@ window.viewEquipmentDetail = async function (id) {
       `;
     }
 
-    // 3. Fetch Standard Limitations
+    // 2. Fetch Standard Limitations
     const limitRes = await fetch(`${API_URL}/config/limitations`, { headers: getAuthHeaders() });
-    let limit = null;
+    let matchingLimits = [];
     if (limitRes.ok) {
       const limitations = await limitRes.json();
       const limitArray = Array.isArray(limitations) ? limitations : (limitations.data || []);
       if (Array.isArray(limitArray)) {
-        limit = limitArray.find(l => l.sup_category === item.sup_category);
+        // Filter all limitations for this sub-category
+        matchingLimits = limitArray.filter(l => l.sup_category === item.sup_category);
       }
     }
 
-    let limitHtml = '<p class="empty-state">No standard limitation for this sub-category</p>';
-    if (limit && limit.name) {
-      const thresholdHtml = (limit.value_type === 'numeric' || !limit.value_type) ? `
-        <div class="threshold-range">
-          <div class="range-item danger">ALV: ${limit.alv}</div>
-          <div class="range-item warning">WLV: ${limit.wlv}</div>
-          <div class="range-item warning">WHV: ${limit.whv}</div>
-          <div class="range-item danger">AHV: ${limit.ahv}</div>
-        </div>
-      ` : '';
-
+    let limitHtml = '';
+    if (matchingLimits.length > 0) {
       limitHtml = `
-        <p><strong>Parameter:</strong> ${limit.name}</p>
-        <p><strong>Normal Value:</strong> ${limit.expected_value || limit.value || '-'}</p>
-        <p><strong>Value Type:</strong> <span class="badge badge-outline">${limit.value_type || 'numeric'}</span></p>
-        ${thresholdHtml}
+        <div class="table-responsive">
+          <table class="config-table" style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+            <thead>
+              <tr style="text-align: left; border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 8px;">Parameter</th>
+                <th style="padding: 8px;">Normal Value</th>
+                <th style="padding: 8px; text-align: center;">Type</th>
+                <th style="padding: 8px;">Thresholds (AL / WL / WH / AH)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${matchingLimits.map(limit => {
+                const isNumeric = (limit.value_type === 'numeric' || limit.value_type === 'percent' || !limit.value_type);
+                const thresholdHtml = isNumeric ? `
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <span class="status-badge Alert" style="padding: 2px 6px; font-size: 0.75rem;" title="Alarm Low">${limit.min_alarm_limit || limit.alv || '-'}</span>
+                    <span class="status-badge Warning" style="padding: 2px 6px; font-size: 0.75rem;" title="Warning Low">${limit.min_warning_limit || limit.wlv || '-'}</span>
+                    <span class="status-badge Warning" style="padding: 2px 6px; font-size: 0.75rem;" title="Warning High">${limit.max_warning_limit || limit.whv || '-'}</span>
+                    <span class="status-badge Alert" style="padding: 2px 6px; font-size: 0.75rem;" title="Alarm High">${limit.max_alarm_limit || limit.ahv || '-'}</span>
+                  </div>
+                ` : '<span class="text-muted" style="font-size: 0.75rem;">Non-numeric</span>';
+
+                return `
+                  <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 8px; font-weight: 600; color: var(--text-primary);">${limit.name}</td>
+                    <td style="padding: 8px;">${limit.expected_value || limit.value || '-'}</td>
+                    <td style="padding: 8px; text-align: center;">
+                      <span class="badge badge-outline" style="font-size: 0.7rem;">${limit.value_type || 'numeric'}</span>
+                    </td>
+                    <td style="padding: 8px;">${thresholdHtml}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
       `;
+    } else {
+      limitHtml = '<p class="empty-state">No standard limitation for this sub-category</p>';
     }
 
     // 4. Update Modal Content
     content.innerHTML = `
       <div class="detail-grid">
-        <div class="detail-card">
-          <h4><i class="fas fa-info-circle"></i> General Information</h4>
-          <p><strong>Name:</strong> ${item.name}</p>
-          <p><strong>Category:</strong> ${item.category} / ${item.sup_category || '-'}</p>
-          <p><strong>Brand/Type:</strong> ${item.merk || '-'} / ${item.type || '-'}</p>
-          <p><strong>Status Operasional:</strong> <span class="status-badge ${item.status_ops || item.status}">${item.status_ops || item.status}</span></p>
-          <p><strong>Coordinate:</strong> ${item.lat}, ${item.lng}</p>
-          <p><strong>Description:</strong> ${item.description || '-'}</p>
-        </div>
-        <div class="detail-card">
+        ${generalInfoHtml}
+        <div class="detail-card" style="${matchingLimits.length > 2 ? 'grid-column: 1 / -1;' : ''}">
           <h4><i class="fas fa-exclamation-triangle"></i> Standard Limitation</h4>
           ${limitHtml}
         </div>
@@ -955,15 +1029,7 @@ window.viewEquipmentDetail = async function (id) {
     console.error('Detail error:', err);
     content.innerHTML = `
       <div class="detail-grid">
-        <div class="detail-card">
-          <h4><i class="fas fa-info-circle"></i> General Information</h4>
-          <p><strong>Name:</strong> ${item.name}</p>
-          <p><strong>Category:</strong> ${item.category} / ${item.sup_category || '-'}</p>
-          <p><strong>Brand/Type:</strong> ${item.merk || '-'} / ${item.type || '-'}</p>
-          <p><strong>Status Operasional:</strong> <span class="status-badge ${item.status_ops || item.status}">${item.status_ops || item.status}</span></p>
-          <p><strong>Coordinate:</strong> ${item.lat}, ${item.lng}</p>
-          <p><strong>Description:</strong> ${item.description || '-'}</p>
-        </div>
+        ${generalInfoHtml}
         <div class="detail-card">
           <h4><i class="fas fa-exclamation-triangle"></i> Standard Limitation</h4>
           <p class="status-error"><i class="fas fa-exclamation-circle"></i> Limitation data unavailable</p>
@@ -1112,18 +1178,22 @@ function updateAuthUI() {
   const sidebarPanel = document.getElementById('sidebarUserPanel');
   const logoutBtn = document.getElementById('sidebarLogoutBtn');
   const userNameEl = document.getElementById('sidebarUserName');
+  const loginModal = document.getElementById('loginModal');
 
   if (currentUser) {
     if (sidebarLogin) sidebarLogin.classList.add('hidden');
     if (sidebarPanel) sidebarPanel.classList.remove('hidden');
     if (logoutBtn) logoutBtn.classList.remove('hidden');
     if (userNameEl) userNameEl.textContent = currentUser.username;
+    if (loginModal) loginModal.classList.add('hidden');
 
     document.querySelectorAll('.hidden-initial').forEach(el => el.classList.remove('hidden-initial'));
   } else {
     if (sidebarLogin) sidebarLogin.classList.remove('hidden');
     if (sidebarPanel) sidebarPanel.classList.add('hidden');
     if (logoutBtn) logoutBtn.classList.add('hidden');
+    // Don't force show login modal on load, allow dashboard view
+    // if (loginModal) loginModal.classList.remove('hidden');
 
     document.querySelectorAll('.hidden-initial').forEach(el => el.classList.add('hidden-initial'));
   }
@@ -1131,12 +1201,14 @@ function updateAuthUI() {
 
 async function handleLogin(e) {
   e.preventDefault();
-  // Check both possible ID naming conventions for robustness
-  const usernameEl = document.getElementById('sidebarUsername') || document.getElementById('username');
-  const passwordEl = document.getElementById('sidebarPassword') || document.getElementById('password');
+  const form = e.target;
+  
+  // Get fields specifically from the form that was submitted
+  const usernameEl = form.querySelector('#sidebarUsername, #username, input[type="text"]');
+  const passwordEl = form.querySelector('#sidebarPassword, #password, input[type="password"]');
 
   if (!usernameEl || !passwordEl) {
-    console.error('Login fields not found');
+    console.error('Login fields not found in submitted form');
     return;
   }
 
@@ -1186,6 +1258,12 @@ function initNavigation() {
   const lastSection = localStorage.getItem('currentSection') || 'dashboard';
 
   const switchSection = (sectionId) => {
+    // Basic protection: don't allow restricted sections without a token
+    const restrictedSections = ['equipment', 'airports', 'equipment-logs', 'users', 'configure', 'network-tools', 'network-monitor'];
+    if (!authToken && restrictedSections.includes(sectionId)) {
+      sectionId = 'dashboard';
+    }
+
     navItems.forEach(i => {
       if (i.getAttribute('data-section') === sectionId) i.classList.add('active');
       else i.classList.remove('active');
@@ -1227,6 +1305,11 @@ function initNavigation() {
     if (sectionId === 'users') {
       loadUsers();
     }
+
+    // Auto-close sidebar on mobile after clicking a section
+    if (window.innerWidth <= 768) {
+      document.getElementById('sidebar').classList.remove('active');
+    }
   };
 
   navItems.forEach(item => {
@@ -1246,11 +1329,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   initNavigation();
   updateAuthUI();
 
+  // Always load public data for dashboard
+  loadStats();
+  loadAirports();
+  loadEquipmentMarkers();
+
   if (authToken) {
     await loadSupCategories();
     await loadAuthentications();
-    loadStats();
-    loadAirports();
     loadEquipment();
   }
 
@@ -1277,9 +1363,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+  
   document.getElementById('menuToggle').addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('active');
   });
+
+  // Sidebar minimization toggle (the chevron)
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('minimized');
+      
+      const icon = sidebarToggle.querySelector('i');
+      if (sidebar.classList.contains('minimized')) {
+        icon.classList.replace('fa-chevron-left', 'fa-chevron-right');
+      } else {
+        icon.classList.replace('fa-chevron-right', 'fa-chevron-left');
+      }
+    });
+  }
 
   document.getElementById('addEquipmentBtn').addEventListener('click', () => {
     document.getElementById('equipmentForm').reset();
@@ -1539,13 +1642,18 @@ window.renderConfigTable = function (tab, data, tbody) {
         </td>
       `;
     } else if (tab === 'authentication') {
+      const equipt = (equipmentData || []).find(e => String(e.id) === String(item.equipt_id));
+      const equiptName = equipt ? equipt.name : (item.equipt_id ? `ID: ${item.equipt_id}` : '<span class="text-muted">Global</span>');
+      
       tr.innerHTML = `
         <td><strong>${item.name}</strong></td>
         <td><code>${item.ip_address}</code></td>
-        <td>${item.equipt_id ? `ID: ${item.equipt_id}` : '<span class="text-muted">Global</span>'}</td>
+        <td><span class="badge badge-outline">${equiptName}</span></td>
         <td>
-          <button class="btn-edit" onclick="editConfig('authentication', '${item.id}')" title="Edit"><i class="fas fa-edit"></i></button>
-          <button class="btn-delete" onclick="deleteConfigData('authentication', '${item.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+          <div class="action-buttons">
+            <button class="btn-edit" onclick="editConfig('authentication', '${item.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+            <button class="btn-delete" onclick="deleteConfigData('authentication', '${item.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+          </div>
         </td>
       `;
     } else if (tab === 'parsing') {
@@ -1729,9 +1837,14 @@ window.renderConfigFields = function (type, item, container) {
       </div>
       <div class="form-group-ux">
         <label>Parser File Path</label>
-        <input type="text" name="files" value="${item?.files || ''}" required placeholder="/public/parsers/name.js">
-        <small class="text-muted">Enter path relative to root directory</small>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" name="files" value="${item?.files || ''}" required placeholder="/public/parsers/name.js" style="flex: 1;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="window.openFilePicker('files')" title="Pilih File dari Folder">
+            <i class="fas fa-folder-open"></i> Browse
+          </button>
+        </div>
       </div>
+
     `;
   }
 }
@@ -2022,3 +2135,102 @@ window.viewLogDetail = function (log) {
 
 window.loadHistoryLogs = loadHistoryLogs;
 
+// --- FILE PICKER LOGIC ---
+let currentPickerTarget = null;
+
+window.openFilePicker = function(targetName) {
+  currentPickerTarget = targetName;
+  const modal = document.getElementById('filePickerModal');
+  if (modal) modal.classList.remove('hidden');
+  // Start in src/parsers folder by default (where parser files are actually located)
+  window.listPickerFiles('src/parsers');
+};
+
+window.listPickerFiles = async function(path) {
+  const listContainer = document.getElementById('filePickerList');
+  const breadcrumbs = document.getElementById('filePickerBreadcrumbs');
+  
+  if (listContainer) {
+    listContainer.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading directory...</div>';
+  }
+
+  try {
+    const res = await fetch(`/api/utils/list-files?path=${encodeURIComponent(path)}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      // Breadcrumbs logic
+      if (breadcrumbs) {
+        const parts = data.currentPath.split('/').filter(p => p);
+        let bHtml = '<span class="file-picker-breadcrumb" onclick="window.listPickerFiles(\'/\')">Root</span>';
+        let accPath = '';
+        parts.forEach(p => {
+          accPath += '/' + p;
+          bHtml += `<span class="file-picker-breadcrumb" onclick="window.listPickerFiles('${accPath}')">${p}</span>`;
+        });
+        breadcrumbs.innerHTML = bHtml;
+      }
+
+      // List contents
+      if (listContainer) {
+        let lHtml = '';
+        if (data.parentPath !== null) {
+          lHtml += `
+            <div class="file-item directory" onclick="window.listPickerFiles('${data.parentPath}')">
+              <i class="fas fa-arrow-up"></i>
+              <span class="file-name">.. (Parent Directory)</span>
+            </div>
+          `;
+        }
+
+        if (data.contents.length === 0) {
+          lHtml += '<div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-muted);">Folder ini kosong</div>';
+        } else {
+          data.contents.forEach(item => {
+            const icon = item.isDir ? 'fa-folder' : 'fa-file-code';
+            const action = item.isDir 
+              ? `window.listPickerFiles('${item.path}')` 
+              : `window.selectPickerFile('${item.path}')`;
+            
+            lHtml += `
+              <div class="file-item ${item.isDir ? 'directory' : 'file'}" onclick="${action}">
+                <i class="fas ${icon}"></i>
+                <span class="file-name">${item.name}</span>
+              </div>
+            `;
+          });
+        }
+        listContainer.innerHTML = lHtml;
+      }
+    } else {
+      if (listContainer) listContainer.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: var(--accent-danger);">❌ ${data.error || 'Gagal memuat folder'}</div>`;
+    }
+  } catch (err) {
+    if (listContainer) listContainer.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center; color: var(--accent-danger);">❌ Terjadi kesalahan koneksi</div>';
+  }
+};
+
+window.selectPickerFile = function(path) {
+  if (currentPickerTarget) {
+    const input = document.querySelector(`input[name="${currentPickerTarget}"]`);
+    if (input) {
+      input.value = path;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  document.getElementById('filePickerModal').classList.add('hidden');
+};
+
+// Global Listeners for Modal Closing
+document.addEventListener('DOMContentLoaded', () => {
+  const closeFilePickerModalBtn = document.getElementById('closeFilePickerModal');
+  const cancelFilePickerBtn = document.getElementById('cancelFilePicker');
+  const filePickerModal = document.getElementById('filePickerModal');
+
+  const closePicker = () => { if (filePickerModal) filePickerModal.classList.add('hidden'); };
+
+  if (closeFilePickerModalBtn) closeFilePickerModalBtn.onclick = closePicker;
+  if (cancelFilePickerBtn) cancelFilePickerBtn.onclick = closePicker;
+});

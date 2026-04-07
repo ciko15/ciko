@@ -21,5 +21,23 @@
     "category": "Surveillance",
     "files": "/src/parsers/asterix.js",
     "createdAt": "2026-04-06T22:01:29.323Z"
+  },
+  {
+    "id": "custom_1775563814757",
+    "name": "VHF Merk PAE",
+    "category": "Communication",
+    "files": "/src/parsers/factory.js",
+    "createdAt": "2026-04-07T12:10:14.758Z",
+    "configId": "custom_1775563814757",
+    "configType": "parsing",
+    "configMode": "edit",
+    "updatedAt": "2026-04-07T12:46:07.463Z"
+  },
+  {
+    "id": "custom_1775565919539",
+    "name": "mm,",
+    "category": "Communication",
+    "files": "/src/parsers/rcms.js",
+    "createdAt": "2026-04-07T12:45:19.540Z"
   }
 ]

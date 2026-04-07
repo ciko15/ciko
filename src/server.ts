@@ -248,35 +248,42 @@ const app = new Elysia()
         try {
             const stats = await db.getEquipmentStatsSummary();
 
-            let normal = 0, warning = 0, alert = 0, disconnect = 0;
+            const response = {
+                total: stats?.total || 0,
+                normal: 0,
+                warning: 0,
+                alert: 0,
+                disconnect: 0,
+                byCategory: {
+                    Communication: 0,
+                    Navigation: 0,
+                    Surveillance: 0,
+                    'Data Processing': 0,
+                    Support: 0
+                }
+            };
+
+            // Map Statuses
             if (stats && Array.isArray(stats.statuses)) {
                 stats.statuses.forEach((row: any) => {
-                    if (row.status === 'Normal') normal = parseInt(row.count);
-                    if (row.status === 'Warning') warning = parseInt(row.count);
-                    if (row.status === 'Alert') alert = parseInt(row.count);
-                    if (row.status === 'Disconnect') disconnect = parseInt(row.count);
+                    const status = row.status.toLowerCase();
+                    if (status === 'normal') response.normal = parseInt(row.count) || 0;
+                    else if (status === 'warning') response.warning = parseInt(row.count) || 0;
+                    else if (status === 'alert') response.alert = parseInt(row.count) || 0;
+                    else if (status === 'disconnect') response.disconnect = parseInt(row.count) || 0;
                 });
             }
 
-            const cats: any = {
-                Communication: 0, Navigation: 0, Surveillance: 0, 'Data Processing': 0, Support: 0
-            };
+            // Map Categories
             if (stats && Array.isArray(stats.categories)) {
                 stats.categories.forEach((row: any) => {
-                    if (cats[row.category] !== undefined) {
-                        cats[row.category] = parseInt(row.count);
+                    if (response.byCategory[row.category as keyof typeof response.byCategory] !== undefined) {
+                        response.byCategory[row.category as keyof typeof response.byCategory] = parseInt(row.count) || 0;
                     }
                 });
             }
 
-            return {
-                total: stats?.total || 0,
-                normal: stats.statuses.find((s: any) => s.status === 'Normal')?.count || 0,
-                warning: stats.statuses.find((s: any) => s.status === 'Warning')?.count || 0,
-                alert: stats.statuses.find((s: any) => s.status === 'Alert')?.count || 0,
-                disconnect: stats.statuses.find((s: any) => s.status === 'Disconnect')?.count || 0,
-                byCategory: cats
-            };
+            return response;
         } catch (error: any) {
             console.error('[API] Error fetching equipment stats:', error);
             return {
@@ -294,15 +301,21 @@ const app = new Elysia()
 
         return (airports || []).map((airport: any) => {
             const airportId = airport.id;
-            const airportEquipment = (equipmentData || []).filter((e: any) => e.airport_id === airportId || e.branch_id === airportId || e.airportId === airportId || e.branchId === airportId);
-            const activeEquipment = (airportEquipment || []).filter((e: any) => e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1' || e.is_active === true);
+            const airportEquipment = (equipmentData || []).filter((e: any) => 
+                e.airport_id === airportId || e.branch_id === airportId || e.airportId === airportId || e.branchId === airportId
+            );
+            
+            // Only consider equipment that is active for calculations
+            const activeEquipment = (airportEquipment || []).filter((e: any) => 
+                e.isActive === true || e.isActive === 'true' || e.is_active === 1 || e.is_active === '1' || e.is_active === true
+            );
 
             return {
                 ...airport,
                 status: getAirportStatus(airportId, activeEquipment),
-                equipmentCount: getEquipmentCountByCategory(airportEquipment),
+                equipmentCount: getEquipmentCountByCategory(activeEquipment),
                 activeEquipmentCount: getEquipmentCountByCategory(activeEquipment),
-                totalEquipment: airportEquipment.length,
+                totalEquipment: activeEquipment.length,
                 totalActiveEquipment: activeEquipment.length
             };
         });
@@ -900,8 +913,66 @@ const app = new Elysia()
                 return { message: 'Deleted' };
             }, { beforeHandle: authorize(['superadmin', 'admin']) })
     )
+    
+    // --- UTILS ROUTES ---
+
+    .group('/api/utils', (app) => {
+        return app.use(authenticate)
+            .get('/ping', () => ({ success: true, message: 'Utils API is active' }))
+            .get('/list-files', async ({ query, set }) => {
+                const { readdir } = require('node:fs/promises');
+                const { join, normalize, resolve, sep } = require('node:path');
+
+                try {
+                    const requestedPath = (query.path as string) || '.';
+                    const rootDir = process.cwd();
+                    
+                    // Normalize requested path to remove .. etc
+                    let safePath = normalize(requestedPath).replace(/^(\.\.(\/|\\|$))+/, '');
+                    if (safePath === '.' || safePath === './' || safePath === '/') safePath = '';
+                    
+                    const targetDir = resolve(rootDir, safePath);
+
+                    // Security: ensure targetDir is within rootDir
+                    if (!targetDir.startsWith(rootDir)) {
+                        set.status = 403;
+                        return { error: 'Access denied: Path is outside project directory' };
+                    }
+
+                    const entries = await readdir(targetDir, { withFileTypes: true });
+                    const contents = entries.map((entry: any) => {
+                        const relativeEntryPath = join(safePath, entry.name);
+                        const webPath = '/' + relativeEntryPath.split(sep).join('/');
+                        
+                        return {
+                            name: entry.name,
+                            isDir: entry.isDirectory(),
+                            path: webPath
+                        };
+                    });
+
+                    // Filtering for security and relevance
+                    const filteredContents = contents.filter((c: any) => 
+                        !c.name.startsWith('.') && 
+                        !c.name.includes('node_modules')
+                    );
+
+                    return {
+                        success: true,
+                        currentPath: '/' + safePath.split(sep).join('/'),
+                        parentPath: (safePath === '' || safePath === '.') ? null : '/' + normalize(join(safePath, '..')).split(sep).join('/'),
+                        contents: filteredContents.sort((a: any, b: any) => (b.isDir ? 1 : 0) - (a.isDir ? 1 : 0) || a.name.localeCompare(b.name))
+                    };
+                } catch (error: any) {
+                    set.status = 500;
+                    return { success: false, error: error.message };
+                }
+            });
+    })
+
 
     // --- PACKET SNIFFER ROUTES ---
+
     .group('/api/sniffer', (app) => {
         const packetSniffer = require('./network/sniffer');
         return app.use(authenticate)

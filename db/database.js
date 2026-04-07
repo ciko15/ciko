@@ -136,14 +136,16 @@ async function getAllEquipment(filters = {}) {
 }
 
 async function getEquipmentStatsSummary() {
-  const equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  const allEquipment = readJson(EQUIPMENT_CONFIG_PATH);
+  const equipmentList = allEquipment.filter(e => e.isActive === true || e.isActive === 'true');
+  
   const stats = {
     total: equipmentList.length,
     statuses: [
-      { status: 'Normal', count: equipmentList.filter(e => e.status === 'Normal').length },
-      { status: 'Warning', count: equipmentList.filter(e => e.status === 'Warning').length },
-      { status: 'Alert', count: equipmentList.filter(e => e.status === 'Alert').length },
-      { status: 'Disconnect', count: equipmentList.filter(e => e.status === 'Disconnect').length }
+      { status: 'Normal', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Normal').length },
+      { status: 'Warning', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Warning').length },
+      { status: 'Alert', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Alert').length },
+      { status: 'Disconnect', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Disconnect').length }
     ],
     categories: [
       { category: 'Communication', count: equipmentList.filter(e => e.category === 'Communication').length },
