@@ -39,19 +39,7 @@ const connectionTester = require('./scheduler/test_connection');
 // const websocketServer = require('./websocket/server'); // We'll handle WS separately in Elysia
 const templateService = require('./services/template');
 
-// Import Surveillance Receivers
-let RadarReceiver: any = null;
-let AdsbReceiver: any = null;
-let radarReceiver: any = null;
-let adsbReceiver: any = null;
 
-try {
-    RadarReceiver = require('../Backend/parse/radar_receiver');
-    AdsbReceiver = require('../Backend/parse/adsb_receiver');
-    console.log('[SURVEILLANCE] Radar and ADS-B receiver modules loaded');
-} catch (err: any) {
-    console.warn('[SURVEILLANCE] Could not load receiver modules:', err.message);
-}
 
 const PORT = process.env.PORT || 3100;
 
@@ -116,61 +104,7 @@ async function collectEquipmentData() {
     }
 }
 
-async function collectSurveillanceData() {
-    try {
-        console.log('[SCHEDULER] Surveillance data collection triggered');
-        const db = require('../db/database');
-        const allEquipment = await db.getAllEquipment({ limit: 10000, isActive: true });
-        const equipmentList = allEquipment.data || allEquipment;
 
-        const surveillanceEquipment = equipmentList.filter((item: any) => {
-            const config = item.snmpConfig || item.snmp_config;
-            return item.category === 'Surveillance' && config && config.enabled &&
-                (config.method === 'asterix' || config.method === 'adsb');
-        });
-
-        for (const item of surveillanceEquipment) {
-            try {
-                const config = item.snmpConfig || item.snmp_config;
-                if (config.method === 'asterix' && RadarReceiver) {
-                    const result = await RadarReceiver.fetchData(item.id);
-                    const status = result.targets && result.targets.length > 0 ? 'Normal' : 'No Targets';
-                    await db.updateEquipmentStatus(item.id, status);
-                    await db.createEquipmentLog({
-                        equipmentId: item.id,
-                        data: {
-                            status,
-                            receiverStatus: result.status,
-                            targetsCount: result.targets ? result.targets.length : 0,
-                            lastTarget: result.targets && result.targets.length > 0 ? result.targets[0] : null,
-                            stationName: item.name,
-                            stationCode: item.code
-                        },
-                        source: 'asterix'
-                    });
-                } else if (config.method === 'adsb' && AdsbReceiver) {
-                    const result = await AdsbReceiver.fetchData(item.id);
-                    const status = result.aircraft && result.aircraft.length > 0 ? 'Normal' : 'No Targets';
-                    await db.updateEquipmentStatus(item.id, status);
-                    await db.createEquipmentLog({
-                        equipmentId: item.id,
-                        data: {
-                            status,
-                            receiverStatus: result.status,
-                            aircraftCount: result.aircraft ? result.aircraft.length : 0,
-                            stationName: item.name
-                        },
-                        source: 'adsb'
-                    });
-                }
-            } catch (err: any) {
-                console.error(`[SCHEDULER-SURVEILLANCE] Error for ${item.name}:`, err.message);
-            }
-        }
-    } catch (error) {
-        console.error('[SCHEDULER-SURVEILLANCE] Error:', error);
-    }
-}
 
 async function seedUpsJakarta() {
     try {
@@ -211,7 +145,6 @@ function getEquipmentCountByCategory(equipmentList: any[]) {
 const app = new Elysia()
     .use(cors())
     .use(serverTiming())
-    .use(staticPlugin({ assets: 'public', prefix: '' }))
     .derive(({ request, set }: any) => {
         const auth = request.headers.get('authorization');
         if (auth && auth.startsWith('Bearer ')) {
@@ -273,6 +206,42 @@ const app = new Elysia()
             user: { username: user.username, role: user.role }
         };
     })
+    
+    // --- HISTORY LOGS ROUTES (File-based) ---
+    .group('/api/history-logs', app => app
+        .use(authenticate)
+        .get('', async ({ query }) => {
+            const fileLogger = require('./utils/fileLogger');
+            const page = parseInt(query.page as string) || 1;
+            const limit = parseInt(query.limit as string) || 50;
+            const search = (query.search as string) || '';
+            const startDate = (query.startDate as string) || null;
+            const endDate = (query.endDate as string) || null;
+            
+            return await fileLogger.getHistoryLogs({ page, limit, search, startDate, endDate });
+        })
+    )
+
+    // --- USER MANAGEMENT ROUTES ---
+    .group('/api/users', app => app
+        .use(authenticate)
+        .get('', async () => await db.getAllUsers(), { beforeHandle: authorize(['superadmin', 'admin']) })
+        .post('', async ({ body, set }) => {
+            const newUser = await db.createUser(body as any);
+            set.status = 201;
+            return newUser;
+        }, { beforeHandle: authorize(['superadmin']) })
+        .put('/:id', async ({ params, body, set }) => {
+            const updated = await db.updateUser(params.id, body);
+            if (!updated) { set.status = 404; return { message: 'User not found' }; }
+            return updated;
+        }, { beforeHandle: authorize(['superadmin']) })
+        .delete('/:id', async ({ params, set }) => {
+            const deleted = await db.deleteUser(params.id);
+            if (!deleted) { set.status = 404; return { message: 'User not found' }; }
+            return { message: 'User deleted' };
+        }, { beforeHandle: authorize(['superadmin']) })
+    )
 
     // Public Equipment Stats
     .get('/api/equipment/stats', async () => {
@@ -559,7 +528,7 @@ const app = new Elysia()
                 }
             }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat', 'teknisi_cabang']) })
             // Delete Equipment
-            .delete('/:id', async ({ params, set }) => {
+            .delete('/remove/:id', async ({ params, set }) => {
                 try {
                     await db.deleteEquipment(params.id);
                     return { message: 'Equipment deleted' };
@@ -793,134 +762,7 @@ const app = new Elysia()
             })
     )
 
-    // --- SURVEILLANCE ROUTES ---
-    .group('/api/surveillance', (app) =>
-        app
-            .get('/stations', async ({ query }) => {
-                const { type, airportId, isActive } = query;
-                const filters: any = {};
-                if (type) filters.type = type;
-                if (airportId) filters.airportId = parseInt(airportId as string);
-                if (isActive !== undefined) filters.isActive = isActive === 'true';
-                return await db.getAllSurveillanceStations(filters);
-            })
-            .get('/stations/:id', async ({ params, set }) => {
-                const station = await db.getSurveillanceStationById(params.id);
-                if (!station) {
-                    set.status = 404;
-                    return { message: 'Station not found' };
-                }
-                return station;
-            })
-            .post('/stations', async ({ body, set }) => {
-                const b = body as any;
-                const station = await db.createSurveillanceStation({
-                    ...b,
-                    port: parseInt(b.port),
-                    lat: b.lat ? parseFloat(b.lat) : null,
-                    lng: b.lng ? parseFloat(b.lng) : null,
-                    airportId: b.airportId ? parseInt(b.airportId) : null
-                });
-                set.status = 201;
-                return station;
-            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
-            .put('/stations/:id', async ({ params, body, set }) => {
-                const b = body as any;
-                const station = await db.updateSurveillanceStation(params.id, {
-                    ...b,
-                    port: b.port ? parseInt(b.port) : undefined,
-                    lat: b.lat ? parseFloat(b.lat) : undefined,
-                    lng: b.lng ? parseFloat(b.lng) : undefined,
-                    airportId: b.airportId ? parseInt(b.airportId) : undefined
-                });
-                if (!station) {
-                    set.status = 404;
-                    return { message: 'Station not found' };
-                }
-                return station;
-            }, { beforeHandle: authorize(['superadmin', 'admin', 'user_pusat']) })
-            .delete('/stations/:id', async ({ params }) => {
-                await db.deleteSurveillanceStation(params.id);
-                return { message: 'Station deleted' };
-            }, { beforeHandle: authorize(['superadmin', 'admin']) })
-            .get('/radar/:stationId', async ({ params, query }) => {
-                const { limit = 100 } = query;
-                return await db.getRadarTargets(parseInt(params.stationId), {
-                    limit: parseInt(limit as string)
-                });
-            })
-            .get('/adsb', async ({ query }) => {
-                const { limit = 500 } = query;
-                return await db.getAdsbAircraft({
-                    limit: parseInt(limit as string)
-                });
-            })
-            .get('/status', async () => {
-                const stations = await db.getAllSurveillanceStations({});
-                const stationList = Array.isArray(stations) ? stations : [];
-                const radarStations = stationList.filter((s: any) => s.type === 'radar');
-                const adsbStations = stationList.filter((s: any) => s.type === 'adsb');
 
-                const radarTargets = await db.getRadarTargets(1, { limit: 1000 });
-                const adsbAircraft = await db.getAdsbAircraft({ limit: 1000 });
-
-                return {
-                    radar: {
-                        totalStations: radarStations.length,
-                        activeStations: radarStations.filter((s: any) => s.isActive).length,
-                        totalTargets: radarTargets.length
-                    },
-                    adsb: {
-                        totalStations: adsbStations.length,
-                        activeStations: adsbStations.filter((s: any) => s.isActive).length,
-                        totalAircraft: adsbAircraft.length
-                    },
-                    stations: stations
-                };
-            })
-            .post('/fetch-asterix', async ({ body, set }) => {
-                const { stationId } = body as any;
-                const station = await db.getSurveillanceStationById(stationId);
-                if (!station) {
-                    set.status = 404;
-                    return { message: 'Station not found' };
-                }
-
-                let targets = [];
-                let receiverStatus = 'disconnected';
-
-                if (radarReceiver) {
-                    try {
-                        const result = await radarReceiver.fetchData(station.id);
-                        targets = result.targets || [];
-                        receiverStatus = result.status;
-                    } catch (err: any) {
-                        console.error('[API] Error fetching from radar receiver:', err.message);
-                    }
-                }
-
-                if (targets.length === 0) {
-                    targets = await db.getRadarTargets(station.id, { limit: 50 });
-                }
-
-                return {
-                    station,
-                    targets,
-                    receiverStatus,
-                    timestamp: new Date().toISOString()
-                };
-            })
-            .get('/logs', async ({ query }) => {
-                const { stationId, logType, severity, page = 1, limit = 100 } = query;
-                const filters: any = {};
-                if (stationId) filters.stationId = parseInt(stationId as string);
-                if (logType) filters.logType = logType;
-                if (severity) filters.severity = severity;
-                filters.page = parseInt(page as string);
-                filters.limit = parseInt(limit as string);
-                return await db.getSurveillanceLogs(filters);
-            })
-    )
 
     // --- USER MANAGEMENT ROUTES ---
 
@@ -989,9 +831,17 @@ const app = new Elysia()
 
     // --- CONFIGURATION MANAGEMENT ROUTES (Issue #12) ---
     .group('/api/config', (app) =>
-        app.use(authenticate)
-            // Limitations
+        app
+            // Public read-only access for lookups (required for UI initialization)
             .get('/limitations', async () => await db.getAllLimitations())
+            .get('/authentications', async () => await db.getAllOtentication())
+            .get('/parsings', async () => await db.getAllParsingConfigs())
+            .get('/categories', async () => await db.getAllCategories())
+            .get('/sup-categories', async () => await db.getAllSupCategories())
+
+            // Require authentication for modifications
+            .use(authenticate)
+            // Limitations
             .post('/limitations', async ({ body, set }) => {
                 const item = await db.createLimitation(body as any);
                 set.status = 201;
@@ -1008,7 +858,6 @@ const app = new Elysia()
             }, { beforeHandle: authorize(['superadmin', 'admin']) })
 
             // Authentications (IP Components)
-            .get('/authentications', async () => await db.getAllOtentication())
             .post('/authentications', async ({ body, set }) => {
                 const item = await db.createOtentication(body as any);
                 set.status = 201;
@@ -1025,7 +874,6 @@ const app = new Elysia()
             }, { beforeHandle: authorize(['superadmin', 'admin']) })
 
             // Parsing Templates
-            .get('/parsings', async () => await db.getAllParsingConfigs())
             .post('/parsings', async ({ body, set }) => {
                 const item = await db.createParsingConfig(body as any);
                 set.status = 201;
@@ -1042,8 +890,6 @@ const app = new Elysia()
             }, { beforeHandle: authorize(['superadmin', 'admin']) })
 
             // Categories & Sup Categories
-            .get('/categories', async () => await db.getAllCategories())
-            .get('/sup-categories', async () => await db.getAllSupCategories())
             .post('/sup-categories', async ({ body, set }) => {
                 const item = await db.createSupCategory(body as any);
                 set.status = 201;
@@ -1084,6 +930,9 @@ const app = new Elysia()
             })
     })
 
+    // Move Static Plugin to the END to avoid intercepting API calls
+    .use(staticPlugin({ assets: 'public', prefix: '' }))
+
     // Root Dashboard Serving (Direct Bun file serving via Response)
     .get('/favicon.ico', () => (globalThis as any).Bun?.file('public/icon.png'))
     .state('simulationMode', true)
@@ -1120,23 +969,6 @@ async function startServices() {
 
         // 4. Initialize Surveillance Receivers if available (DISABLED)
         /*
-        if (RadarReceiver && AdsbReceiver) {
-            console.log('[SURVEILLANCE] Initializing Radar and ADS-B receivers...');
-            
-            radarReceiver = new RadarReceiver({
-                dataDir: './data',
-                onData: (type: string, station: any, data: any) => {
-                    console.log(`[SURVEILLANCE] Radar data from ${station.name}`);
-                },
-                onError: (station: any, error: any) => {
-                    console.error(`[SURVEILLANCE] Radar error for ${station.name}:`, error.message);
-                }
-            });
-            
-            adsbReceiver = new AdsbReceiver({
-                dataDir: './data',
-                onData: (station: any, aircraft: any) => {
-                    // console.log(`[SURVEILLANCE] ADS-B data from ${station.name}`);
                 }
             });
 
@@ -1146,6 +978,13 @@ async function startServices() {
             console.log('[SURVEILLANCE] Receivers started');
         }
         */
+
+        // 5. Start History Log Cleanup (Every 24 hours)
+        const fileLogger = require('./utils/fileLogger');
+        // Initial cleanup
+        setTimeout(() => fileLogger.cleanupOldLogs(), 5000);
+        // Periodic cleanup
+        setInterval(() => fileLogger.cleanupOldLogs(), 86400000);
 
         console.log('[SYSTEM] Core services initialized (Background collection disabled)');
     } catch (err) {

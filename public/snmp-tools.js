@@ -320,24 +320,29 @@ async function saveThreshold(thresholdData) {
       return true;
     } else {
       const data = await response.json();
-      alert(data.message || 'Error saving threshold');
+      showToast(data.message || 'Error saving threshold', 'error');
       return false;
     }
   } catch (error) {
     console.error('Error saving threshold:', error);
-    alert('Error saving threshold: ' + error.message);
+    showToast('Error saving threshold: ' + error.message, 'error');
     return false;
   }
 }
 
 async function deleteThreshold(thresholdId) {
-  if (!confirm('Are you sure you want to delete this threshold?')) return;
+  const confirmed = await showConfirm(
+    'Hapus Threshold?', 
+    'Are you sure you want to delete this threshold?',
+    { type: 'danger', confirmText: 'Hapus' }
+  );
+  if (!confirmed) return;
   
   const select = document.getElementById('thresholdEquipmentSelect');
   const equipmentId = select ? select.value : null;
   
   if (!equipmentId) {
-    alert('Please select an equipment first');
+    showToast('Please select an equipment first', 'warning');
     return;
   }
   
@@ -350,11 +355,11 @@ async function deleteThreshold(thresholdId) {
     if (response.ok) {
       await loadThresholdsForEquipment(equipmentId);
     } else {
-      alert('Error deleting threshold');
+      showToast('Error deleting threshold', 'error');
     }
   } catch (error) {
     console.error('Error deleting threshold:', error);
-    alert('Error deleting threshold: ' + error.message);
+    showToast('Error deleting threshold: ' + error.message, 'error');
   }
 }
 
@@ -396,7 +401,7 @@ function initThresholdSettings() {
     addBtn.addEventListener('click', () => {
       const select = document.getElementById('thresholdEquipmentSelect');
       if (!select || !select.value) {
-        alert('Please select an equipment first');
+        showToast('Please select an equipment first', 'warning');
         return;
       }
       
@@ -504,12 +509,12 @@ async function startPing() {
   const resultDiv = document.getElementById('pingToolResult');
   
   if (!ip) {
-    alert('Masukkan alamat IP terlebih dahulu');
+    showToast('Masukkan alamat IP terlebih dahulu', 'warning');
     return;
   }
   
   if (!interval || interval < 1 || interval > 60) {
-    alert('Interval harus antara 1-60 detik');
+    showToast('Interval harus antara 1-60 detik', 'warning');
     return;
   }
   
@@ -532,7 +537,7 @@ async function startPing() {
     if (response.ok) {
       // Start polling for results
       pingIntervalId = setInterval(loadPingResults, 2000);
-      alert(data.message);
+      showToast(data.message, 'success');
       
       if (resultDiv) {
         resultDiv.innerHTML = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 8px; padding: 15px;">
@@ -544,7 +549,7 @@ async function startPing() {
         </div>`;
       }
     } else {
-      alert(data.error || 'Gagal memulai ping');
+      showToast(data.error || 'Gagal memulai ping', 'error');
       if (resultDiv) {
         resultDiv.innerHTML = `<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 15px;">
           <h4 style="color: #ef4444; margin-bottom: 10px;"><i class="fas fa-times-circle"></i> Error</h4>
@@ -554,7 +559,7 @@ async function startPing() {
     }
   } catch (error) {
     console.error('[Ping] Error:', error);
-    alert('Error: ' + error.message);
+    showToast('Error: ' + error.message, 'error');
   }
 }
 
@@ -571,7 +576,7 @@ async function stopPing() {
       pingIntervalId = null;
     }
     
-    alert(data.message);
+    showToast(data.message, 'info');
     
     // Clear results display
     const resultDiv = document.getElementById('pingToolResult');
@@ -580,7 +585,7 @@ async function stopPing() {
     }
   } catch (error) {
     console.error('[Ping] Stop error:', error);
-    alert('Error: ' + error.message);
+    showToast('Error: ' + error.message, 'error');
   }
 }
 

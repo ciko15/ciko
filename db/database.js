@@ -165,7 +165,7 @@ async function createEquipment(data) {
   let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
   const newEquip = {
     ...data,
-    id: Date.now(),
+    id: Number(data.id) || Date.now(),
     status: data.status || 'Normal',
     status_ops: data.status_ops || 'Normal',
     merk: data.merk || '-',
@@ -399,6 +399,7 @@ async function getLimitationsByEquipment(equipmentId) {
 }
 
 async function createLimitation(data) {
+  console.log('[DB] createLimitation received data:', JSON.stringify(data, null, 2));
   let list = readJson(LIMITATION_CONFIG_PATH);
   const item = {
     id: Date.now(),
@@ -407,10 +408,16 @@ async function createLimitation(data) {
     sup_category: data.sup_category,
     value: data.value,
     value_type: data.value_type || 'numeric', // numeric, string, percent
-    wlv: data.wlv,
-    alv: data.alv,
-    whv: data.whv,
-    ahv: data.ahv,
+    // New descriptive limit fields
+    min_warning_limit: data.min_warning_limit,
+    min_alarm_limit: data.min_alarm_limit,
+    max_warning_limit: data.max_warning_limit,
+    max_alarm_limit: data.max_alarm_limit,
+    // Keep legacy for backward compatibility
+    wlv: data.min_warning_limit || data.wlv,
+    alv: data.min_alarm_limit || data.alv,
+    whv: data.max_warning_limit || data.whv,
+    ahv: data.max_alarm_limit || data.ahv,
     expected_value: data.expected_value || null
   };
   list.push(item);
@@ -419,11 +426,21 @@ async function createLimitation(data) {
 }
 
 async function updateLimitation(id, data) {
+  console.log(`[DB] updateLimitation received id: ${id}, data:`, JSON.stringify(data, null, 2));
   let list = readJson(LIMITATION_CONFIG_PATH);
   const index = list.findIndex(l => l.id == id || l.equipt_id == id);
 
   if (index !== -1) {
-    list[index] = { ...list[index], ...data };
+    // Clean up technical fields from frontend
+    const { configType, configId, configMode, ...cleanData } = data;
+    
+    // Sync legacy fields if new ones are provided
+    if (cleanData.min_warning_limit) cleanData.wlv = cleanData.min_warning_limit;
+    if (cleanData.min_alarm_limit) cleanData.alv = cleanData.min_alarm_limit;
+    if (cleanData.max_warning_limit) cleanData.whv = cleanData.max_warning_limit;
+    if (cleanData.max_alarm_limit) cleanData.ahv = cleanData.max_alarm_limit;
+
+    list[index] = { ...list[index], ...cleanData };
     writeJson(LIMITATION_CONFIG_PATH, list);
     return list[index];
   }
@@ -457,6 +474,28 @@ async function createUser(data) {
   users.push(newUser);
   writeJson(USERS_CONFIG_PATH, users);
   return newUser;
+}
+
+async function updateUser(id, data) {
+  let users = readJson(USERS_CONFIG_PATH);
+  const index = users.findIndex(u => u.id == id);
+  if (index !== -1) {
+    users[index] = { ...users[index], ...data, id: Number(id) };
+    writeJson(USERS_CONFIG_PATH, users);
+    return users[index];
+  }
+  return null;
+}
+
+async function deleteUser(id) {
+  let users = readJson(USERS_CONFIG_PATH);
+  const originalLength = users.length;
+  users = users.filter(u => u.id != id);
+  if (users.length < originalLength) {
+    writeJson(USERS_CONFIG_PATH, users);
+    return true;
+  }
+  return false;
 }
 
 // --- CATEGORIES ---
@@ -515,49 +554,6 @@ async function deleteThreshold(id) {
   thresholdSettingsDB = thresholdSettingsDB.filter(t => t.id != id);
 }
 
-// --- SURVEILLANCE STATIONS ---
-async function getAllSurveillanceStations(filters = {}) {
-  return surveillanceStationsDB;
-}
-
-async function getSurveillanceStationById(id) {
-  return surveillanceStationsDB.find(s => s.id == id) || null;
-}
-
-async function createSurveillanceStation(data) {
-  const s = { ...data, id: Date.now() };
-  surveillanceStationsDB.push(s);
-  return s;
-}
-
-async function updateSurveillanceStation(id, data) {
-  const index = surveillanceStationsDB.findIndex(s => s.id == id);
-  if (index !== -1) {
-    surveillanceStationsDB[index] = { ...surveillanceStationsDB[index], ...data };
-    return surveillanceStationsDB[index];
-  }
-  return null;
-}
-
-async function deleteSurveillanceStation(id) {
-  surveillanceStationsDB = surveillanceStationsDB.filter(s => s.id != id);
-}
-
-// --- RADAR & ADS-B ---
-async function saveRadarTarget(data) { radarTargetsDB.push(data); return data; }
-async function getRadarTargets() { return radarTargetsDB; }
-async function saveAdsbAircraft(data) { adsbAircraftDB.push(data); return data; }
-async function getAdsbAircraft() { return adsbAircraftDB; }
-async function getAdsbAircraftByIcao(icao) { return adsbAircraftDB.find(a => a.icao == icao); }
-
-// --- SURVEILLANCE LOGS ---
-async function createSurveillanceLog(data) {
-  surveillanceLogsDB.push({ ...data, id: Date.now(), logged_at: new Date().toISOString() });
-}
-async function getSurveillanceLogs(filters = {}) {
-  return { data: surveillanceLogsDB, pagination: { page: 1, limit: 100 } };
-}
-
 module.exports = {
   query,
   // Airports
@@ -611,27 +607,17 @@ module.exports = {
   createThreshold,
   updateThreshold,
   deleteThreshold,
-  // Surveillance Stations
-  getAllSurveillanceStations,
-  getSurveillanceStationById,
-  createSurveillanceStation,
-  updateSurveillanceStation,
-  deleteSurveillanceStation,
-  // Radar Targets
-  saveRadarTarget,
-  getRadarTargets,
-  // ADS-B Aircraft
-  saveAdsbAircraft,
-  getAdsbAircraft,
-  getAdsbAircraftByIcao,
-  // Surveillance Logs
-  createSurveillanceLog,
-  getSurveillanceLogs,
+
+
+
+
   // Users
   getAllUsers,
   getUserByUsername,
   getUserById,
   createUser,
+  updateUser,
+  deleteUser,
   // SNMP Templates
   getAllSnmpTemplates,
   getSnmpTemplateById,

@@ -182,21 +182,32 @@
               </button>
             </div>
             <div id="dataSourceContainer">
-              <!-- Data source rows will be added here dynamically -->
+              <table class="data-source-table" style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <thead>
+                  <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                    <th style="padding: 10px 5px;">Nama Source</th>
+                    <th style="padding: 10px 5px;">IP Address</th>
+                    <th style="padding: 10px 5px; text-align: center;">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="dataSourceTableBody">
+                  <!-- Data source rows will be added here dynamically -->
+                </tbody>
+              </table>
             </div>
           </div>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i> Save Equipment
-            </button>
-            <button type="button" class="btn btn-danger" id="cancelEquipmentEdit">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-          </div>
-        </form>
       </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Equipment
+        </button>
+        <button type="button" class="btn btn-danger" id="cancelEquipmentEdit">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+      </form>
     </div>
+  </div>
   </div>
 
   <!-- Add Data Source Overlay Modal -->
@@ -740,15 +751,11 @@
         </a>
 
         <!-- Surveillance - RADAR & ADS-B -->
-        <!-- <a href="#" class="nav-item" data-section="surveillance" id="surveillanceNavItem">
-          <i class="fas fa-radar"></i>
-          <span>Surveillance</span>
-        </a> -->
 
 
         <a href="#" class="nav-item hidden-initial" data-section="equipment-logs" id="equipmentLogsNavItem">
           <i class="fas fa-history"></i>
-          <span>Equipment Logs</span>
+          <span>History Logs</span>
         </a>
         <a href="#" class="nav-item hidden-initial" data-section="users" id="usersNavItem">
           <i class="fas fa-users"></i>
@@ -759,11 +766,7 @@
           <i class="fas fa-sliders-h"></i>
           <span>Configure</span>
         </a>
-        <!-- Equipment Templates - Data Parsing Templates -->
-        <a href="#" class="nav-item hidden-initial" data-section="equipment-templates" id="equipmentTemplatesNavItem">
-          <i class="fas fa-cogs"></i>
-          <span>Equipment Templates</span>
-        </a>
+
         <!-- Configuration - SNMP Tools, Network Monitor, Threshold Settings available in Configuration section -->
         <a href="#" class="nav-item hidden-initial" data-section="network-tools" id="networkToolsNavItem">
           <i class="fas fa-network-wired"></i>
@@ -1076,51 +1079,7 @@
         </div>
       </section>
 
-      <!-- Surveillance Section - RADAR & ADS-B -->
-      <section class="content-section hidden" id="surveillanceSection">
-        <div class="crud-container">
-          <div class="card">
-            <div class="card-header">
-              <h2><i class="fas fa-radar"></i> Surveillance - RADAR & ADS-B</h2>
-              <div class="header-actions">
-                <select id="filterSurveillanceType" class="filter-select">
-                  <option value="all">All Types</option>
-                  <option value="radar">RADAR</option>
-                  <option value="adsb">ADS-B</option>
-                </select>
-                <button class="btn btn-secondary" id="refreshSurveillanceBtn">
-                  <i class="fas fa-sync-alt"></i> Refresh
-                </button>
-                <button class="btn btn-primary" id="addSurveillanceStationBtn" style="display: none;">
-                  <i class="fas fa-plus"></i> Add Station
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div class="table-responsive">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Name / Airport</th>
-                      <th>Type</th>
-                      <th>IP:Port</th>
-                      <th>Coordinates</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="surveillanceTableBody">
-                    <tr>
-                      <td colspan="7" class="empty-state">Loading surveillance stations...</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+
 
       <!-- Configuration Section - Two Panel Layout -->
       <section class="content-section hidden" id="configurationSection">
@@ -1351,43 +1310,6 @@
         </div>
       </section>
 
-      <!-- Equipment Templates Section -->
-      <section class="content-section hidden" id="equipment-templatesSection">
-        <div class="crud-container">
-          <div class="card">
-            <div class="card-header">
-              <h2><i class="fas fa-cogs"></i> Equipment Templates</h2>
-              <div class="header-actions">
-                <button class="btn btn-primary" id="addTemplateBtn">
-                  <i class="fas fa-plus"></i> Add Template
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div class="table-responsive">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Category</th>
-                      <th>Brand</th>
-                      <th>Model</th>
-                      <th>Type</th>
-                      <th>Description</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="templateTableBody">
-                    <tr>
-                      <td colspan="7" class="empty-state">Loading templates...</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <section class="content-section hidden" id="configurationSectionAlt">
         <div class="crud-container">
@@ -1664,7 +1586,7 @@
         <div class="crud-container">
           <div class="card">
             <div class="card-header">
-              <h2><i class="fas fa-history"></i> Equipment Logs</h2>
+              <h2><i class="fas fa-history"></i> History Logs</h2>
               <div class="header-actions">
                 <select id="logsPageSize" class="filter-select" style="width: 100px;">
                   <option value="10">10 rows</option>
@@ -1960,7 +1882,7 @@
                             <th>Parameter Name</th>
                             <th>Sub-Category</th>
                             <th>Value Type</th>
-                            <th>Expected/Range</th>
+                            <th>Limits</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -2236,8 +2158,9 @@
       </div>
       <div class="modal-body">
         <form id="configForm" autocomplete="off">
-          <input type="hidden" id="configId">
-          <input type="hidden" id="configType">
+          <input type="hidden" id="configId" name="configId">
+          <input type="hidden" id="configType" name="configType">
+          <input type="hidden" id="configMode" name="configMode">
 
           <div id="configFieldsContainer">
             <!-- Dynamic Fields will be injected here -->
@@ -2255,11 +2178,10 @@
   <!-- Scripts -->
   <script src="app.js"></script>
   <script src="cabang-app.js"></script>
-  <script src="config-nav.js"></script>
   <script src="snmp-tools.js"></script>
   <script src="network-tools.js"></script>
   <script src="network-monitoring-dashboard.js"></script>
-  <script src="surveillance-app.js"></script>
+
   <script src="template-app.js"></script>
 
 </body>

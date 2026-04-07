@@ -1,11 +1,14 @@
 [
   {
-    "id": 1,
+    "id": 1680000000000,
     "name": "Full Services",
     "category": "Communication",
     "sup_category": "VHF A/G",
-    "value": "ok",
     "value_type": "string",
-    "expected_value": "ok"
+    "expected_value": "ok",
+    "min_warning_limit": null,
+    "min_alarm_limit": null,
+    "max_warning_limit": null,
+    "max_alarm_limit": null
   }
 ]

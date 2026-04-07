@@ -7,61 +7,48 @@
     "merk": "Maru",
     "type": "220",
     "status": "Active",
-    "status_ops": "Normal",
     "lat": -2.5768,
     "lng": 140.5163,
     "airportId": 1,
-    "isActive": true,
-    "snmpConfig": {
-      "enabled": false
-    },
+    "isActive": false,
     "branchId": 1,
-    "description": ""
-  },
-  {
-    "id": 102,
-    "name": "VHF Ground-to-Air",
-    "category": "Communication",
-    "status": "Active",
-    "lat": -2.578,
-    "lng": 140.518,
-    "airportId": 1,
-    "isActive": true,
-    "snmpConfig": {
-      "enabled": false
-    },
-    "branchId": 1,
-    "sup_category": "VHF A/G",
-    "merk": "",
-    "type": "",
+    "description": "",
     "status_ops": "Normal",
-    "description": ""
+    "dataSources": []
   },
   {
     "id": 103,
     "name": "Radar MSSR",
     "category": "Surveillance",
-    "status": "Normal",
-    "lat": -2.575,
-    "lng": 140.52,
+    "status": "Active",
+    "lat": -2.596905,
+    "lng": 140.528376,
     "airportId": 1,
     "isActive": true,
-    "snmpConfig": {
-      "enabled": false
-    },
-    "branchId": 1
+    "branchId": 1,
+    "sup_category": "RADAR",
+    "merk": "",
+    "type": "",
+    "status_ops": "Normal",
+    "description": "",
+    "dataSources": []
   },
   {
     "name": "test",
     "category": "Data Processing",
     "airportId": 1,
-    "status": "Normal",
+    "status": "Active",
     "lat": -2.577,
     "lng": 140.518,
     "description": "",
     "branchId": 1,
     "id": 1775111180529,
-    "isActive": true
+    "isActive": true,
+    "sup_category": "ATCAS",
+    "merk": "",
+    "type": "",
+    "status_ops": "Normal",
+    "dataSources": []
   },
   {
     "name": "Auto-Airport Test",
@@ -74,5 +61,39 @@
     "branchId": 1,
     "id": 1775111531489,
     "isActive": true
+  },
+  {
+    "name": "Localizer",
+    "category": "Navigation",
+    "sup_category": "ILS-LLZ",
+    "merk": "THALES",
+    "type": "421",
+    "status": "Active",
+    "status_ops": "Normal",
+    "airportId": 1,
+    "lat": -2.570887,
+    "lng": 140.508335,
+    "description": "",
+    "isActive": true,
+    "dataSources": [],
+    "branchId": 1,
+    "id": "1775527260954"
+  },
+  {
+    "id": "1775529728876",
+    "name": "VHF P",
+    "category": "Communication",
+    "sup_category": "VHF A/G",
+    "merk": "-",
+    "type": "-",
+    "status": "Active",
+    "status_ops": "Normal",
+    "airportId": 1,
+    "lat": -2.572072,
+    "lng": 140.514764,
+    "description": "",
+    "isActive": true,
+    "dataSources": [],
+    "branchId": 1
   }
 ]
