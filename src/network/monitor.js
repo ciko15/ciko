@@ -442,63 +442,74 @@ class NetworkMonitor {
    */
   async discoverNetworkDevices() {
     try {
-      // Get the local IP address to determine the network range
       const interfaces = await this.getNetworkInterfaces();
       const activeDevices = [];
+      const scannedSubnets = new Set();
+      
+      // Find all active interfaces that have an IPv4 address and are not loopback
+      const validInterfaces = interfaces.filter(i => 
+        i.ip4 && 
+        i.ip4 !== '127.0.0.1' && 
+        (i.operstate === 'UP' || i.operstate === 'up' || i.operstate === 'unknown')
+      );
 
-      // Find the primary active interface
-      const primaryInterface = interfaces.find(i => i.ip4 && i.operstate === 'UP');
-      if (!primaryInterface || !primaryInterface.ip4) {
-        return { interfaces: [], devices: [] };
+      if (validInterfaces.length === 0) {
+        return { interfaces: [], devices: [], message: 'No active network interfaces found' };
       }
 
-      // Get network range
-      const ip = primaryInterface.ip4;
-      const parts = ip.split('.');
-      const networkPrefix = parts.slice(0, 3).join('.');
+      console.log(`[Network Monitor] Scanning ${validInterfaces.length} interfaces...`);
+      const commonIps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 50, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 254];
+      const allPromises = [];
 
-      // Ping common device IPs on the network
-      const commonIps = [1, 254, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110];
-      const promises = [];
+      for (const iface of validInterfaces) {
+        const ip = iface.ip4;
+        const parts = ip.split('.');
+        const networkPrefix = parts.slice(0, 3).join('.');
+        
+        // Avoid scanning the same subnet twice if multiple interfaces are on it
+        if (scannedSubnets.has(networkPrefix)) continue;
+        scannedSubnets.add(networkPrefix);
 
-      for (const suffix of commonIps) {
-        const testIp = `${networkPrefix}.${suffix}`;
-        if (testIp !== ip) {
-          promises.push(
-            this.pingHost(testIp, 1).then(result => ({
-              ip: testIp,
-              reachable: result.reachable
-            }))
-          );
+        for (const suffix of commonIps) {
+          const testIp = `${networkPrefix}.${suffix}`;
+          if (testIp !== ip) {
+            allPromises.push(
+              this.pingHost(testIp, 1).then(result => ({
+                ip: testIp,
+                reachable: result.reachable,
+                interface: iface.name
+              }))
+            );
+          }
         }
       }
 
-      const results = await Promise.all(promises);
-      const reachableIps = results.filter(r => r.reachable).map(r => r.ip);
+      const results = await Promise.all(allPromises);
+      const reachableResults = results.filter(r => r.reachable);
 
       // Get ARP table for detailed device info
       const arpDevices = await this.getArpTable();
 
       // Combine reachable IPs with ARP table data
-      for (const ip of reachableIps) {
-        const arpEntry = arpDevices.find(d => d.ip === ip);
+      for (const res of reachableResults) {
+        const arpEntry = arpDevices.find(d => d.ip === res.ip);
         activeDevices.push({
-          ip,
+          ip: res.ip,
           mac: arpEntry ? arpEntry.mac : 'Unknown',
-          interface: arpEntry ? arpEntry.interface : primaryInterface.name,
+          interface: res.interface,
           hostname: arpEntry ? arpEntry.hostname : 'Unknown',
           reachable: true
         });
       }
 
       return {
-        networkPrefix,
-        primaryInterface: primaryInterface.name,
+        scannedInterfaces: validInterfaces.map(i => i.name),
+        networkPrefixes: Array.from(scannedSubnets),
         devices: activeDevices
       };
     } catch (error) {
       console.error('[Network Monitor] Error discovering devices:', error.message);
-      return { devices: [] };
+      return { devices: [], error: error.message };
     }
   }
 

@@ -74,31 +74,42 @@ async function collectEquipmentData() {
         const equipmentList = allEquipment.data || allEquipment;
 
         for (const item of equipmentList) {
+            // Only process active equipment
+            const isActive = item.isActive === true || item.isActive === 'true' || item.is_active === 1 || item.is_active === '1' || item.is_active === true;
+            if (!isActive) continue;
+
             const config = item.snmpConfig || item.snmp_config;
-            if (config?.enabled) {
-                try {
-                    const { parsedData, status, triggeredParameters } = await fetchAndParseData(item);
+            
+            try {
+                const { parsedData, status, triggeredParameters, isProcessed } = await fetchAndParseData(item);
+                
+                // Only update status and logs if we actually had sources to monitor
+                if (isProcessed) {
                     await db.updateEquipmentStatus(item.id, status);
                     await db.createEquipmentLog({
                         equipmentId: item.id,
                         data: { ...parsedData, status, triggeredParameters: triggeredParameters || [] },
-                        source: config.templateId || 'snmp'
+                        source: config?.templateId || 'ping_monitor'
                     });
 
-                    // File logging (new)
+                    // File logging
                     const fileLogger = require('./utils/fileLogger');
                     await fileLogger.log(item.name || `equip_${item.id}`, item.id, {
                         ...parsedData,
                         status,
                         triggeredParameters: triggeredParameters || [],
-                        _ip: parsedData._ip
+                        _ip: parsedData._ip || (parsedData._sources && parsedData._sources[0]?.ip)
                     });
-                } catch (err: any) {
-                    console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
+                }
+            } catch (err: any) {
+                console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
+                // If it's a critical failure for a monitored device, mark as Disconnect
+                if (config?.enabled) {
                     await db.updateEquipmentStatus(item.id, 'Disconnect');
                 }
             }
         }
+
     } catch (error) {
         console.error('[SCHEDULER] Error:', error);
     }
@@ -1006,7 +1017,6 @@ const app = new Elysia()
 
     // Root Dashboard Serving (Direct Bun file serving via Response)
     .get('/favicon.ico', () => (globalThis as any).Bun?.file('public/icon.png'))
-    .state('simulationMode', true)
 
     .get('/api/test-chain', () => {
         console.log('[DEBUG-ROUTER] Hit /api/test-chain');

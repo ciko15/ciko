@@ -62,8 +62,8 @@
   {
     "id": 1775553530304,
     "name": "SDM",
-    "category": "Communication",
-    "sup_category": "VHF A/G",
+    "category": "Navigation",
+    "sup_category": "ILS-GP",
     "value_type": "numeric",
     "min_warning_limit": "78",
     "min_alarm_limit": "76",

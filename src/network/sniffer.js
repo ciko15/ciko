@@ -18,6 +18,7 @@ class PacketSniffer {
     this.tsharkAvailable = null;
     this.packetCounter = 0;
     this.currentInterface = null;
+    this.lastError = null;
   }
 
   async isTcpdumpAvailable() {
@@ -42,35 +43,40 @@ class PacketSniffer {
     return this.tsharkAvailable;
   }
 
-  /**
-   * Start sniffing packets from network interfaces
-   */
   async start(interfaceName = null) {
     if (this.isActive) return;
 
     this.isActive = true;
     this.packets = [];
     this.packetCounter = 0;
-    this.currentInterface = interfaceName || 'any';
-
-    // For development/testing, always use simulated capture to ensure data
-    this.captureMode = 'simulated';
-    this.startSimulatedCapture(this.currentInterface);
-
-    console.log('[Packet Sniffer] Started simulated capturing on interface:', this.currentInterface, 'packets:', this.packets.length);
-  }
-
-  startSimulatedCapture(interfaceName) {
-    this.captureMode = 'simulated';
-    console.log('[Packet Sniffer] Starting simulated packet capture');
     
-    // Generate initial packets
-    this.generateAdditionalPackets(interfaceName);
+    // Choose a better default than 'any' for macOS
+    if ((!interfaceName || interfaceName === 'any' || interfaceName === '') && process.platform === 'darwin') {
+      this.currentInterface = 'en0'; // Primary choice for Mac
+    } else {
+      this.currentInterface = interfaceName || 'en0'; // Fallback to en0 if nothing provided
+    }
     
-    this.captureInterval = setInterval(() => {
-      // Always add some packets even with low activity
-      this.generateAdditionalPackets(interfaceName);
-    }, 1000); // Every 1 second
+    console.log(`[Packet Sniffer] Using interface: ${this.currentInterface}`);
+    this.lastError = null;
+
+    // Prioritize real tools (tshark/tcpdump) if available
+    const tsharkAvailable = await this.isTsharkAvailable();
+    const tcpdumpAvailable = await this.isTcpdumpAvailable();
+
+    if (tsharkAvailable) {
+      console.log(`[Packet Sniffer] Starting real capture using Tshark on ${this.currentInterface}`);
+      this.captureMode = 'tshark';
+      this.startTsharkCapture(this.currentInterface);
+    } else if (tcpdumpAvailable) {
+      console.log(`[Packet Sniffer] Starting real capture using Tcpdump on ${this.currentInterface}`);
+      this.captureMode = 'tcpdump';
+      this.startTcpdumpCapture(this.currentInterface);
+    } else {
+      console.log(`[Packet Sniffer] No capture tools found (tshark/tcpdump). Real capture is not possible.`);
+      this.captureMode = 'none';
+      this.isActive = false;
+    }
   }
 
   startTcpdumpCapture(interfaceName) {
@@ -81,17 +87,7 @@ class PacketSniffer {
       let buffer = '';
       this.tcpdumpProcess.stdout.setEncoding('utf8');
 
-      // Set a timeout to fallback to simulated if tcpdump doesn't produce data
-      const fallbackTimeout = setTimeout(() => {
-        if (this.packets.length === 0) {
-          console.log('[Packet Sniffer] tcpdump not producing data, falling back to simulated capture');
-          this.stopTcpdump();
-          this.startSimulatedCapture(interfaceName);
-        }
-      }, 5000);
-
       this.tcpdumpProcess.stdout.on('data', chunk => {
-        clearTimeout(fallbackTimeout); // Clear fallback if we get data
         buffer += chunk;
         const lines = buffer.split('\n');
         buffer = lines.pop();
@@ -110,34 +106,29 @@ class PacketSniffer {
 
       this.tcpdumpProcess.stderr.setEncoding('utf8');
       this.tcpdumpProcess.stderr.on('data', data => {
-        console.warn('[Packet Sniffer] tcpdump:', data.toString().trim());
+        const errorMsg = data.toString().trim();
+        console.warn('[Packet Sniffer] tcpdump:', errorMsg);
+        if (!this.lastError) {
+          this.lastError = errorMsg;
+        } else if (!this.lastError.includes(errorMsg)) {
+          this.lastError += '\n' + errorMsg;
+        }
       });
 
       this.tcpdumpProcess.on('close', code => {
         console.log('[Packet Sniffer] tcpdump exited with code', code);
         this.tcpdumpProcess = null;
-        // If tcpdump exits and we have no packets, start simulated
-        if (this.packets.length === 0 && this.isActive) {
-          console.log('[Packet Sniffer] tcpdump failed, starting simulated capture');
-          this.startSimulatedCapture(interfaceName);
-        }
+        this.isActive = false;
       });
 
       this.tcpdumpProcess.on('error', error => {
         console.error('[Packet Sniffer] tcpdump error:', error.message);
         this.tcpdumpProcess = null;
-        // On error, immediately fallback to simulated
-        if (this.isActive) {
-          console.log('[Packet Sniffer] tcpdump failed, starting simulated capture');
-          this.startSimulatedCapture(interfaceName);
-        }
+        this.isActive = false;
       });
     } catch (error) {
       console.error('[Packet Sniffer] Failed to start tcpdump:', error);
-      // On exception, fallback to simulated
-      if (this.isActive) {
-        this.startSimulatedCapture(interfaceName);
-      }
+      this.isActive = false;
     }
   }
 
@@ -157,7 +148,6 @@ class PacketSniffer {
         rawData: ''
       };
 
-      // Example line: 10:47:24.123456 IP 192.168.1.5.55618 > 172.217.22.46.443: Flags [P.], seq 123:456, ack 789, win 501, length 33
       const match = line.match(/^(\d{2}:\d{2}:\d{2}\.\d+)\s+(\S+)\s+(.+?)\s+>\s+(.+?):\s*(.*)$/);
       if (match) {
         packet.protocol = match[2];
@@ -171,7 +161,6 @@ class PacketSniffer {
         packet.length = parseInt(lengthMatch[1], 10);
       }
 
-      // Normalize protocol values
       if (packet.protocol) {
         packet.protocol = packet.protocol.toUpperCase();
       }
@@ -183,141 +172,6 @@ class PacketSniffer {
     }
   }
 
-  /**
-   * Generate additional packets for simulated capture
-   */
-  generateAdditionalPackets(interfaceName) {
-    try {
-      // Always generate some background traffic
-      const backgroundPackets = Math.floor(Math.random() * 3) + 1; // 1-3 packets
-      
-      for (let i = 0; i < backgroundPackets; i++) {
-        const packet = {
-          number: ++this.packetCounter,
-          time: Date.now() / 1000,
-          interface: interfaceName,
-          source: this.generateRandomIP(),
-          destination: this.generateRandomIP(),
-          protocol: this.getRandomProtocol(),
-          length: Math.floor(Math.random() * 1500) + 50,
-          info: this.generatePacketInfo(),
-          direction: Math.random() > 0.5 ? 'in' : 'out',
-          rate: Math.random() * 100,
-          rawData: this.generateHexData(Math.floor(Math.random() * 1500) + 50)
-        };
-        
-        this.packets.push(packet);
-        // Keep only last 1000 packets
-        if (this.packets.length > 1000) {
-          this.packets.shift();
-        }
-      }
-      
-      // Generate application-specific traffic (HTTP, database connections, etc.)
-      this.generateApplicationPackets(interfaceName);
-    } catch (error) {
-      console.error('[Sniffer] Error generating packets:', error);
-    }
-  }
-
-  /**
-   * Generate packets that represent application traffic
-   */
-  generateApplicationPackets(interfaceName) {
-    const appPackets = [
-      // HTTP traffic to localhost
-      {
-        source: '127.0.0.1:54321',
-        destination: '127.0.0.1:3000',
-        protocol: 'TCP',
-        info: 'HTTP GET /api/equipment',
-        length: 512
-      },
-      {
-        source: '127.0.0.1:3000',
-        destination: '127.0.0.1:54321',
-        protocol: 'TCP',
-        info: 'HTTP 200 OK (application/json)',
-        length: 2048
-      },
-      // Database connections
-      {
-        source: '127.0.0.1:54322',
-        destination: '127.0.0.1:3306',
-        protocol: 'TCP',
-        info: 'MySQL query: SELECT * FROM equipment',
-        length: 256
-      },
-      // SNMP traffic
-      {
-        source: '192.168.1.100:161',
-        destination: '192.168.1.10:1025',
-        protocol: 'UDP',
-        info: 'SNMP get-request sysDescr.0',
-        length: 128
-      }
-    ];
-    
-    // Add 0-2 application packets randomly
-    const numAppPackets = Math.floor(Math.random() * 3);
-    for (let i = 0; i < numAppPackets; i++) {
-      const template = appPackets[Math.floor(Math.random() * appPackets.length)];
-      const packet = {
-        number: ++this.packetCounter,
-        time: Date.now() / 1000,
-        interface: interfaceName,
-        source: template.source,
-        destination: template.destination,
-        protocol: template.protocol,
-        length: template.length,
-        info: template.info,
-        direction: template.source.includes('127.0.0.1') ? 'out' : 'in',
-        rate: Math.random() * 50,
-        rawData: this.generateHexData(template.length)
-      };
-      
-      this.packets.push(packet);
-      // Keep only last 1000 packets
-      if (this.packets.length > 1000) {
-        this.packets.shift();
-      }
-    }
-  }
-
-  generateRandomIP() {
-    return `${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
-  }
-
-  getRandomProtocol() {
-    const protocols = ['TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'SNMP', 'SSH', 'FTP'];
-    return protocols[Math.floor(Math.random() * protocols.length)];
-  }
-
-  generatePacketInfo() {
-    const infos = [
-      'Data packet',
-      'TCP segment',
-      'UDP datagram', 
-      'ICMP echo request',
-      'HTTP request',
-      'DNS query',
-      'SNMP trap',
-      'Background traffic'
-    ];
-    return infos[Math.floor(Math.random() * infos.length)];
-  }
-
-  /**
-   * Generate random hex data for packet raw data
-   */
-  generateHexData(length) {
-    let hex = '';
-    for (let i = 0; i < length; i++) {
-      hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-    }
-    return hex;
-  }
-
   stopTcpdump() {
     if (this.tcpdumpProcess) {
       this.tcpdumpProcess.kill('SIGINT');
@@ -325,7 +179,6 @@ class PacketSniffer {
     }
   }
 
-  // Start packet capture using tshark (produces JSON output)
   startTsharkCapture(interfaceName) {
     try {
       const args = ['-l', '-n', '-i', interfaceName, '-T', 'json'];
@@ -336,55 +189,86 @@ class PacketSniffer {
       let currentObject = '';
 
       this.tsharkProcess.stdout.setEncoding('utf8');
+
       this.tsharkProcess.stdout.on('data', chunk => {
         buffer += chunk;
-
-        // Skip initial array open
-        if (buffer.startsWith('[')) {
-          buffer = buffer.slice(1);
-        }
-
-        for (let i = 0; i < buffer.length; i++) {
-          const char = buffer[i];
-          currentObject += char;
-
-          if (char === '{') braceDepth++;
-          if (char === '}') braceDepth--;
-
-          if (braceDepth === 0 && currentObject.trim()) {
+        
+        // Faster parsing: find JSON objects by looking for complete { ... } patterns
+        // Note: tshark -T json outputs a single array [ {obj}, {obj} ]
+        // We can split by '}\n  ,' or '}\n]' or similar
+        
+        let startIdx = buffer.indexOf('{');
+        while (startIdx !== -1) {
+            // Find the potential end of the object
+            // This is a simplification but much faster than character loop
+            // In tshark -T json, objects are nicely formatted with newlines
+            let endIdx = buffer.indexOf('}\n', startIdx);
+            if (endIdx === -1) break; // Incomplete object
+            
+            const potentialJson = buffer.substring(startIdx, endIdx + 1);
             try {
-              const obj = JSON.parse(currentObject);
-              const packet = this.parseTsharkJsonPacket(obj, interfaceName);
-              if (packet) {
-                this.packets.push(packet);
-                if (this.packets.length > 1000) this.packets.shift();
-              }
+                const obj = JSON.parse(potentialJson);
+                const packet = this.parseTsharkJsonPacket(obj, interfaceName);
+                if (packet) {
+                    this.packets.push(packet);
+                    if (this.packets.length > 1000) this.packets.shift();
+                }
+                buffer = buffer.substring(endIdx + 1);
+                startIdx = buffer.indexOf('{');
             } catch (err) {
-              // ignore partial JSON chunks
+                // If it wasn't valid JSON, maybe the } wasn't the real end
+                // We search for the next possible }
+                startIdx = buffer.indexOf('{', startIdx + 1);
             }
-            currentObject = '';
-          }
         }
-
-        // Keep remaining data that wasn't parsed yet
-        buffer = currentObject;
+        
+        // Prevent buffer from growing indefinitely if we can't find valid JSON
+        if (buffer.length > 50000) {
+            const lastStart = buffer.lastIndexOf('{');
+            buffer = lastStart !== -1 ? buffer.substring(lastStart) : '';
+        }
       });
 
       this.tsharkProcess.stderr.setEncoding('utf8');
       this.tsharkProcess.stderr.on('data', data => {
-        console.warn('[Packet Sniffer] tshark:', data.toString().trim());
+        const errorMsg = data.toString().trim();
+        console.warn('[Packet Sniffer] tshark stderr:', errorMsg);
+        
+        // Filter out informational messages that aren't real errors
+        const isInfo = errorMsg.includes('Capturing on') || 
+                      errorMsg.match(/^\d+ packets captured$/i) ||
+                      errorMsg.includes('Packets captured:');
+        
+        if (!isInfo) {
+          if (!this.lastError) {
+            this.lastError = errorMsg;
+          } else if (!this.lastError.includes(errorMsg)) {
+            this.lastError += '\n' + errorMsg;
+          }
+        }
       });
 
       this.tsharkProcess.on('close', code => {
         console.log('[Packet Sniffer] tshark exited with code', code);
         this.tsharkProcess = null;
+        this.isActive = false;
       });
 
       this.tsharkProcess.on('error', error => {
         console.error('[Packet Sniffer] tshark error:', error.message);
+        this.tsharkProcess = null;
+        this.isActive = false;
       });
     } catch (error) {
       console.error('[Packet Sniffer] Failed to start tshark:', error);
+      this.isActive = false;
+    }
+  }
+
+  stopTshark() {
+    if (this.tsharkProcess) {
+      this.tsharkProcess.kill('SIGINT');
+      this.tsharkProcess = null;
     }
   }
 
@@ -411,7 +295,6 @@ class PacketSniffer {
         packet.length = parseInt(layers.frame['frame.len'] || packet.length, 10) || packet.length;
       }
 
-      // Derive protocol and addresses from common layers
       if (layers.ip) {
         packet.source = layers.ip['ip.src'] || packet.source;
         packet.destination = layers.ip['ip.dst'] || packet.destination;
@@ -439,40 +322,21 @@ class PacketSniffer {
     }
   }
 
-  /**
-   * Stop sniffing packets
-   */
   stop() {
     if (!this.isActive) return;
 
     this.isActive = false;
 
-    if (this.captureInterval) {
-      clearInterval(this.captureInterval);
-      this.captureInterval = null;
-    }
-
-    if (this.tcpdumpProcess) {
-      this.tcpdumpProcess.kill('SIGINT');
-      this.tcpdumpProcess = null;
-    }
-
-    if (this.tsharkProcess) {
-      this.tsharkProcess.kill('SIGINT');
-      this.tsharkProcess = null;
-    }
+    this.stopTcpdump();
+    this.stopTshark();
 
     networkMonitor.stopCapturing();
     console.log('[Packet Sniffer] Stopped - total packets:', this.packets.length);
   }
 
-  /**
-   * Get captured packets
-   */
   getPackets(filter = {}) {
     let result = [...this.packets];
 
-    // Apply filters
     if (filter.protocol) {
       result = result.filter(p => p.protocol === filter.protocol);
     }
@@ -489,13 +353,9 @@ class PacketSniffer {
       result = result.filter(p => p.interface === filter.interface);
     }
 
-    // Limit results to last 500
     return result.slice(-500);
   }
 
-  /**
-   * Get packet statistics
-   */
   getStatistics() {
     const stats = {
       totalPackets: this.packets.length,
@@ -512,20 +372,15 @@ class PacketSniffer {
     }
 
     stats.captureMode = this.captureMode;
+    stats.lastError = this.lastError;
     return stats;
   }
 
-  /**
-   * Clear captured packets
-   */
   clear() {
     this.packets = [];
     console.log('[Packet Sniffer] Packets cleared');
   }
 
-  /**
-   * Export packets
-   */
   export(format = 'json') {
     if (format === 'json') {
       return {
@@ -536,7 +391,6 @@ class PacketSniffer {
       };
     }
 
-    // CSV format
     let csv = 'No.,Time,Interface,Source,Destination,Protocol,Length,Direction,Info\n';
     for (const packet of this.packets) {
       csv += `${packet.number},${packet.time},${packet.interface},${packet.source},${packet.destination},${packet.protocol},${packet.length},${packet.direction},${packet.info}\n`;
@@ -544,9 +398,6 @@ class PacketSniffer {
     return csv;
   }
 
-  /**
-   * Get packet details
-   */
   getPacketDetails(packetNumber) {
     const packet = this.packets.find(p => p.number === packetNumber);
     if (!packet) return null;

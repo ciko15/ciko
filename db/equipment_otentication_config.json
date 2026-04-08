@@ -17,9 +17,9 @@
     "id": 1775530650776,
     "name": "Source - Localizer",
     "equipt_id": "1775527260954",
-    "ip_address": "192.168.50.10",
+    "ip_address": "127.0.0.1",
     "parsing_id": "dvor_maru_220",
-    "udp_port": "4001"
+    "udp_port": "5001"
   },
   {
     "id": 1775540662647,
@@ -38,5 +38,11 @@
     "name": "RX 1",
     "equipt_id": "1775111531489",
     "ip_address": "192.168.1.13"
+  },
+  {
+    "id": 1775619554618,
+    "name": "New Loc",
+    "equipt_id": "1775619333282",
+    "ip_address": "192.168.50.10"
   }
 ]

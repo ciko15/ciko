@@ -100,5 +100,22 @@
     "isActive": true,
     "dataSources": [],
     "branchId": 1
+  },
+  {
+    "id": 1775619333282,
+    "name": "New Loc",
+    "category": "Navigation",
+    "sup_category": "ILS-LLZ",
+    "merk": "THALES",
+    "type": "422",
+    "status": "Active",
+    "status_ops": "Normal",
+    "airportId": 1,
+    "lat": -2.569864,
+    "lng": 140.507771,
+    "description": "",
+    "isActive": true,
+    "dataSources": [],
+    "branchId": 1
   }
 ]

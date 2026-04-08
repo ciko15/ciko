@@ -12,13 +12,22 @@ const LIMITATION_CONFIG_PATH = path.join(__dirname, 'limitation_config.json');
 const TEMPLATE_CONFIG_PATH = path.join(__dirname, 'templates_config.json');
 
 // --- GENERIC JSON HELPERS ---
-function readJson(filePath, defaultValue = []) {
+async function readJson(filePath, defaultValue = []) {
   try {
+    const file = globalThis.Bun ? globalThis.Bun.file(filePath) : null;
+    if (file) {
+      if (!(await file.exists())) {
+        if (defaultValue !== null) await writeJson(filePath, defaultValue);
+        return defaultValue;
+      }
+      return await file.json();
+    }
+    // Fallback to Node fs for environments without Bun (though this is a Bun app)
     if (!fs.existsSync(filePath)) {
-      if (defaultValue !== null) writeJson(filePath, defaultValue);
+      if (defaultValue !== null) await writeJson(filePath, defaultValue);
       return defaultValue;
     }
-    const data = fs.readFileSync(filePath, 'utf8');
+    const data = await fs.promises.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (err) {
     console.error(`Error reading JSON from ${filePath}:`, err);
@@ -26,9 +35,14 @@ function readJson(filePath, defaultValue = []) {
   }
 }
 
-function writeJson(filePath, data) {
+async function writeJson(filePath, data) {
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    const content = JSON.stringify(data, null, 2);
+    if (globalThis.Bun) {
+      await globalThis.Bun.write(filePath, content);
+    } else {
+      await fs.promises.writeFile(filePath, content, 'utf8');
+    }
     return true;
   } catch (err) {
     console.error(`Error writing JSON to ${filePath}:`, err);
@@ -37,8 +51,8 @@ function writeJson(filePath, data) {
 }
 
 // --- AIRPORT CONFIG HELPERS ---
-function readAirportConfig() {
-  const data = readJson(AIRPORT_CONFIG_PATH, null);
+async function readAirportConfig() {
+  const data = await readJson(AIRPORT_CONFIG_PATH, null);
   return data || {
     id: 1,
     name: 'Bandara Sentani',
@@ -51,8 +65,8 @@ function readAirportConfig() {
   };
 }
 
-function writeAirportConfig(data) {
-  return writeJson(AIRPORT_CONFIG_PATH, data);
+async function writeAirportConfig(data) {
+  return await writeJson(AIRPORT_CONFIG_PATH, data);
 }
 
 // --- IN-MEMORY DATA (HISTORICAL/NON-PERSISTENT) ---
@@ -70,11 +84,11 @@ async function query(sql, params = []) {
 
 // --- AIRPORTS ---
 async function getAllAirports() {
-  return [readAirportConfig()];
+  return [await readAirportConfig()];
 }
 
 async function getAirportsPaginated(options = {}) {
-  const airport = readAirportConfig();
+  const airport = await readAirportConfig();
   const { page = 1, limit = 20 } = options;
   return {
     data: [airport],
@@ -83,20 +97,20 @@ async function getAirportsPaginated(options = {}) {
 }
 
 async function getAirportById(id) {
-  const airport = readAirportConfig();
+  const airport = await readAirportConfig();
   return airport.id == id ? airport : null;
 }
 
 async function createAirport(data) {
   console.log('[Airport] Create ignored - using single config mode');
-  return readAirportConfig();
+  return await readAirportConfig();
 }
 
 async function updateAirport(id, data) {
-  const airport = readAirportConfig();
+  const airport = await readAirportConfig();
   if (airport.id == id) {
     const updated = { ...airport, ...data };
-    writeAirportConfig(updated);
+    await writeAirportConfig(updated);
     return updated;
   }
   return null;
@@ -108,7 +122,7 @@ async function deleteAirport(id) {
 
 // --- EQUIPMENT ---
 async function getAllEquipment(filters = {}) {
-  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  let equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   let filtered = [...equipmentList];
 
   if (filters.category) {
@@ -136,7 +150,7 @@ async function getAllEquipment(filters = {}) {
 }
 
 async function getEquipmentStatsSummary() {
-  const allEquipment = readJson(EQUIPMENT_CONFIG_PATH);
+  const allEquipment = await readJson(EQUIPMENT_CONFIG_PATH);
   const equipmentList = allEquipment.filter(e => e.isActive === true || e.isActive === 'true');
   
   const stats = {
@@ -159,12 +173,12 @@ async function getEquipmentStatsSummary() {
 }
 
 async function getEquipmentById(id) {
-  const equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  const equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   return equipmentList.find(e => e.id == id) || null;
 }
 
 async function createEquipment(data) {
-  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  let equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   const newEquip = {
     ...data,
     id: Number(data.id) || Date.now(),
@@ -177,12 +191,12 @@ async function createEquipment(data) {
     isActive: data.isActive !== undefined ? (data.isActive === true || data.isActive === 'true') : true
   };
   equipmentList.push(newEquip);
-  writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
+  await writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
   return newEquip;
 }
 
 async function updateEquipment(id, data) {
-  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  let equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   const index = equipmentList.findIndex(e => e.id == id);
   if (index !== -1) {
     const updated = {
@@ -193,40 +207,40 @@ async function updateEquipment(id, data) {
       isActive: data.isActive !== undefined ? (data.isActive === true || data.isActive === 'true') : equipmentList[index].isActive
     };
     equipmentList[index] = updated;
-    writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
+    await writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
     return updated;
   }
   return null;
 }
 
 async function updateEquipmentStatus(id, status) {
-  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  let equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   const index = equipmentList.findIndex(e => e.id == id);
   if (index !== -1) {
     equipmentList[index].status = status;
-    writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
+    await writeJson(EQUIPMENT_CONFIG_PATH, equipmentList);
   }
 }
 
 async function deleteEquipment(id) {
-  let equipmentList = readJson(EQUIPMENT_CONFIG_PATH);
+  let equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   const newList = equipmentList.filter(e => e.id != id);
-  writeJson(EQUIPMENT_CONFIG_PATH, newList);
+  await writeJson(EQUIPMENT_CONFIG_PATH, newList);
 }
 
 // --- EQUIPMENT PARSING CONFIGS (PREVIOUSLY SNMP TEMPLATES) ---
 async function getAllParsingConfigs() {
-  const configs = readJson(PARSING_CONFIG_PATH);
+  const configs = await readJson(PARSING_CONFIG_PATH);
   return configs;
 }
 
 async function getParsingConfigById(id) {
-  const configs = readJson(PARSING_CONFIG_PATH);
+  const configs = await readJson(PARSING_CONFIG_PATH);
   return configs.find(c => c.id == id || c.name == id) || null;
 }
 
 async function createParsingConfig(data) {
-  let configs = readJson(PARSING_CONFIG_PATH);
+  let configs = await readJson(PARSING_CONFIG_PATH);
   const newCfg = {
     id: data.id || `custom_${Date.now()}`,
     name: data.name,
@@ -235,123 +249,123 @@ async function createParsingConfig(data) {
     createdAt: new Date().toISOString()
   };
   configs.push(newCfg);
-  writeJson(PARSING_CONFIG_PATH, configs);
+  await writeJson(PARSING_CONFIG_PATH, configs);
   return newCfg;
 }
 
 async function updateParsingConfig(id, data) {
-  let configs = readJson(PARSING_CONFIG_PATH);
+  let configs = await readJson(PARSING_CONFIG_PATH);
   const index = configs.findIndex(c => c.id == id);
   if (index !== -1) {
     configs[index] = { ...configs[index], ...data, updatedAt: new Date().toISOString() };
-    writeJson(PARSING_CONFIG_PATH, configs);
+    await writeJson(PARSING_CONFIG_PATH, configs);
     return configs[index];
   }
   return null;
 }
 
 async function deleteParsingConfig(id) {
-  let configs = readJson(PARSING_CONFIG_PATH);
+  let configs = await readJson(PARSING_CONFIG_PATH);
   const newList = configs.filter(c => c.id != id);
-  writeJson(PARSING_CONFIG_PATH, newList);
+  await writeJson(PARSING_CONFIG_PATH, newList);
   return true;
 }
 
 // --- SNMP TEMPLATES (FOR CONFIGURATION MENU) ---
 async function getAllSnmpTemplates() {
-  return readJson(TEMPLATE_CONFIG_PATH);
+  return await readJson(TEMPLATE_CONFIG_PATH);
 }
 
 async function getSnmpTemplateById(id) {
-  const templates = readJson(TEMPLATE_CONFIG_PATH);
+  const templates = await readJson(TEMPLATE_CONFIG_PATH);
   return templates.find(t => t.id == id) || null;
 }
 
 async function createSnmpTemplate(data) {
-  let templates = readJson(TEMPLATE_CONFIG_PATH);
+  let templates = await readJson(TEMPLATE_CONFIG_PATH);
   const newTgl = {
     ...data,
     id: data.id || `custom_${Date.now()}`,
     createdAt: new Date().toISOString()
   };
   templates.push(newTgl);
-  writeJson(TEMPLATE_CONFIG_PATH, templates);
+  await writeJson(TEMPLATE_CONFIG_PATH, templates);
   return newTgl;
 }
 
 async function updateSnmpTemplate(id, data) {
-  let templates = readJson(TEMPLATE_CONFIG_PATH);
+  let templates = await readJson(TEMPLATE_CONFIG_PATH);
   const index = templates.findIndex(t => t.id == id);
   if (index !== -1) {
     templates[index] = { ...templates[index], ...data, updatedAt: new Date().toISOString() };
-    writeJson(TEMPLATE_CONFIG_PATH, templates);
+    await writeJson(TEMPLATE_CONFIG_PATH, templates);
     return templates[index];
   }
   return null;
 }
 
 async function deleteSnmpTemplate(id) {
-  let templates = readJson(TEMPLATE_CONFIG_PATH);
+  let templates = await readJson(TEMPLATE_CONFIG_PATH);
   const newList = templates.filter(t => t.id != id);
-  writeJson(TEMPLATE_CONFIG_PATH, newList);
+  await writeJson(TEMPLATE_CONFIG_PATH, newList);
   return true;
 }
 
 // --- SUP CATEGORIES ---
 async function getAllSupCategories() {
-  return readJson(SUP_CATEGORY_PATH);
+  return await readJson(SUP_CATEGORY_PATH);
 }
 
 async function getSupCategoriesByCategory(category) {
-  const data = readJson(SUP_CATEGORY_PATH);
+  const data = await readJson(SUP_CATEGORY_PATH);
   if (!category) return data;
   return data.find(c => c.category === category) || { category, sub_categories: [] };
 }
 
 async function createSupCategory(data) {
-  let list = readJson(SUP_CATEGORY_PATH);
+  let list = await readJson(SUP_CATEGORY_PATH);
   const newItem = {
     id: Date.now(),
     category: data.category,
     sub_categories: data.sub_categories || []
   };
   list.push(newItem);
-  writeJson(SUP_CATEGORY_PATH, list);
+  await writeJson(SUP_CATEGORY_PATH, list);
   return newItem;
 }
 
 async function deleteSupCategory(id) {
-  let data = readJson(SUP_CATEGORY_PATH);
+  let data = await readJson(SUP_CATEGORY_PATH);
   // Support deletion by id or category name
   const newList = data.filter(c => c.id != id && c.category !== id);
-  writeJson(SUP_CATEGORY_PATH, newList);
+  await writeJson(SUP_CATEGORY_PATH, newList);
   return true;
 }
 
 async function updateSupCategory(category, subCategories) {
-  let data = readJson(SUP_CATEGORY_PATH);
+  let data = await readJson(SUP_CATEGORY_PATH);
   const index = data.findIndex(c => c.category === category);
   if (index !== -1) {
     data[index].sub_categories = subCategories;
   } else {
     data.push({ category, sub_categories: subCategories });
   }
-  writeJson(SUP_CATEGORY_PATH, data);
+  await writeJson(SUP_CATEGORY_PATH, data);
   return true;
 }
 
 // --- EQUIPMENT OTENTICATION (IP COMPONENTS) ---
 async function getAllOtentication() {
-  return readJson(AUTH_CONFIG_PATH);
+  return await readJson(AUTH_CONFIG_PATH);
 }
 
 async function getOtenticationByEquipment(equipmentId) {
-  const data = readJson(AUTH_CONFIG_PATH);
+  const data = await readJson(AUTH_CONFIG_PATH);
   return data.filter(a => a.equipt_id == equipmentId);
 }
 
 async function createOtentication(data) {
-  let authList = readJson(AUTH_CONFIG_PATH);
+  let authList = await readJson(AUTH_CONFIG_PATH);
   const newItem = {
     id: Date.now() + Math.floor(Math.random() * 1000),
     name: data.name,
@@ -359,50 +373,50 @@ async function createOtentication(data) {
     ip_address: data.ip_address
   };
   authList.push(newItem);
-  writeJson(AUTH_CONFIG_PATH, authList);
+  await writeJson(AUTH_CONFIG_PATH, authList);
   return newItem;
 }
 
 async function updateOtentication(id, data) {
-  let list = readJson(AUTH_CONFIG_PATH);
+  let list = await readJson(AUTH_CONFIG_PATH);
   const index = list.findIndex(a => a.id == id);
   if (index !== -1) {
     list[index] = { ...list[index], ...data };
-    writeJson(AUTH_CONFIG_PATH, list);
+    await writeJson(AUTH_CONFIG_PATH, list);
     return list[index];
   }
   return null;
 }
 
 async function deleteOtentication(id) {
-  let list = readJson(AUTH_CONFIG_PATH);
+  let list = await readJson(AUTH_CONFIG_PATH);
   const newList = list.filter(a => a.id != id);
-  writeJson(AUTH_CONFIG_PATH, newList);
+  await writeJson(AUTH_CONFIG_PATH, newList);
 }
 
 async function deleteOtenticationByEquipment(equipmentId) {
-  let authList = readJson(AUTH_CONFIG_PATH);
+  let authList = await readJson(AUTH_CONFIG_PATH);
   const newList = authList.filter(a => a.equipt_id != equipmentId);
-  writeJson(AUTH_CONFIG_PATH, newList);
+  await writeJson(AUTH_CONFIG_PATH, newList);
 }
 
 // --- LIMITATION CONFIGS ---
 async function getAllLimitations() {
-  return readJson(LIMITATION_CONFIG_PATH);
+  return await readJson(LIMITATION_CONFIG_PATH);
 }
 
 async function getLimitationsByEquipment(equipmentId) {
   const equipment = await getEquipmentById(equipmentId);
   if (!equipment || !equipment.sup_category) return {};
 
-  const data = readJson(LIMITATION_CONFIG_PATH);
+  const data = await readJson(LIMITATION_CONFIG_PATH);
   // Find limitation by sup_category instead of equipt_id
   return data.find(l => l.sup_category === equipment.sup_category) || {};
 }
 
 async function createLimitation(data) {
   console.log('[DB] createLimitation received data:', JSON.stringify(data, null, 2));
-  let list = readJson(LIMITATION_CONFIG_PATH);
+  let list = await readJson(LIMITATION_CONFIG_PATH);
   const item = {
     id: Date.now(),
     name: data.name,
@@ -423,13 +437,13 @@ async function createLimitation(data) {
     expected_value: data.expected_value || null
   };
   list.push(item);
-  writeJson(LIMITATION_CONFIG_PATH, list);
+  await writeJson(LIMITATION_CONFIG_PATH, list);
   return item;
 }
 
 async function updateLimitation(id, data) {
   console.log(`[DB] updateLimitation received id: ${id}, data:`, JSON.stringify(data, null, 2));
-  let list = readJson(LIMITATION_CONFIG_PATH);
+  let list = await readJson(LIMITATION_CONFIG_PATH);
   const index = list.findIndex(l => l.id == id || l.equipt_id == id);
 
   if (index !== -1) {
@@ -443,58 +457,58 @@ async function updateLimitation(id, data) {
     if (cleanData.max_alarm_limit) cleanData.ahv = cleanData.max_alarm_limit;
 
     list[index] = { ...list[index], ...cleanData };
-    writeJson(LIMITATION_CONFIG_PATH, list);
+    await writeJson(LIMITATION_CONFIG_PATH, list);
     return list[index];
   }
   return null;
 }
 
 async function deleteLimitation(id) {
-  let list = readJson(LIMITATION_CONFIG_PATH);
+  let list = await readJson(LIMITATION_CONFIG_PATH);
   const newList = list.filter(l => l.id != id);
-  writeJson(LIMITATION_CONFIG_PATH, newList);
+  await writeJson(LIMITATION_CONFIG_PATH, newList);
 }
 
 // --- USERS ---
 async function getAllUsers() {
-  return readJson(USERS_CONFIG_PATH);
+  return await readJson(USERS_CONFIG_PATH);
 }
 
 async function getUserByUsername(username) {
-  const users = readJson(USERS_CONFIG_PATH);
+  const users = await readJson(USERS_CONFIG_PATH);
   return users.find(u => u.username === username) || null;
 }
 
 async function getUserById(id) {
-  const users = readJson(USERS_CONFIG_PATH);
+  const users = await readJson(USERS_CONFIG_PATH);
   return users.find(u => u.id == id) || null;
 }
 
 async function createUser(data) {
-  let users = readJson(USERS_CONFIG_PATH);
+  let users = await readJson(USERS_CONFIG_PATH);
   const newUser = { ...data, id: Date.now() };
   users.push(newUser);
-  writeJson(USERS_CONFIG_PATH, users);
+  await writeJson(USERS_CONFIG_PATH, users);
   return newUser;
 }
 
 async function updateUser(id, data) {
-  let users = readJson(USERS_CONFIG_PATH);
+  let users = await readJson(USERS_CONFIG_PATH);
   const index = users.findIndex(u => u.id == id);
   if (index !== -1) {
     users[index] = { ...users[index], ...data, id: Number(id) };
-    writeJson(USERS_CONFIG_PATH, users);
+    await writeJson(USERS_CONFIG_PATH, users);
     return users[index];
   }
   return null;
 }
 
 async function deleteUser(id) {
-  let users = readJson(USERS_CONFIG_PATH);
+  let users = await readJson(USERS_CONFIG_PATH);
   const originalLength = users.length;
   users = users.filter(u => u.id != id);
   if (users.length < originalLength) {
-    writeJson(USERS_CONFIG_PATH, users);
+    await writeJson(USERS_CONFIG_PATH, users);
     return true;
   }
   return false;
