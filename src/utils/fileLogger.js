@@ -60,7 +60,11 @@ class FileLogger {
             };
             
             const logLine = `${JSON.stringify(logEntry)}${os.EOL}`;
-            fs.appendFileSync(logPath, logLine, 'utf8');
+            if (globalThis.Bun) {
+                await globalThis.Bun.write(logPath, logLine, { append: true });
+            } else {
+                await fs.promises.appendFile(logPath, logLine, 'utf8');
+            }
             
             console.log('[FILELOG] Logged to ' + path.relative(process.cwd(), logPath));
             return true;
@@ -119,19 +123,19 @@ class FileLogger {
             // 1. Get all YYYY-MM folders, sorted descending
             if (!fs.existsSync(this.baseDir)) return { data: [], total: 0 };
             
-            const monthFolders = fs.readdirSync(this.baseDir)
+            const monthFolders = (await fs.promises.readdir(this.baseDir))
                 .filter(f => /^\d{4}-\d{2}$/.test(f))
                 .sort((a, b) => b.localeCompare(a));
             
             for (const month of monthFolders) {
                 const monthPath = path.join(this.baseDir, month);
-                const dayFolders = fs.readdirSync(monthPath)
+                const dayFolders = (await fs.promises.readdir(monthPath))
                     .filter(f => /^\d{2}$/.test(f))
                     .sort((a, b) => b.localeCompare(a));
                 
                 for (const day of dayFolders) {
                     const dayPath = path.join(monthPath, day);
-                    const files = fs.readdirSync(dayPath)
+                    const files = (await fs.promises.readdir(dayPath))
                         .filter(f => f.endsWith('.log'))
                         .sort((a, b) => {
                             // Extract hour for sorting if possible
@@ -142,12 +146,13 @@ class FileLogger {
                     
                     for (const file of files) {
                         const filePath = path.join(dayPath, file);
-                        const content = fs.readFileSync(filePath, 'utf8');
+                        const content = await fs.promises.readFile(filePath, 'utf8');
                         const lines = content.split(os.EOL).filter(l => l.trim());
                         
-                        for (const line of lines) {
+                        // Process lines in reverse to get newest first
+                        for (let i = lines.length - 1; i >= 0; i--) {
                             try {
-                                const entry = JSON.parse(line);
+                                const entry = JSON.parse(lines[i]);
                                 
                                 // Apply filters
                                 if (search && !entry.equipmentName?.toLowerCase().includes(search.toLowerCase()) && 
@@ -160,19 +165,15 @@ class FileLogger {
                                 
                                 allEntries.push(entry);
                                 
-                                // If we have enough for the current page + next buffer, we could stop
-                                // but for correct sorting across files, we need more.
-                                // Optimization: Only read enough files to satisfy page/limit if possible.
+                                // If we have enough entries for the current page and more, we can potentially stop
+                                if (allEntries.length >= page * limit + 200) break;
                             } catch (e) { /* ignore malformed lines */ }
                         }
+                        if (allEntries.length >= page * limit + 200) break;
                     }
-                    
-                    // Optimization: if we have enough entries and we've processed a whole day, 
-                    // and we are sorting by date, we can probably stop if we don't need accurate total count.
-                    // But the user wants "tampilan data dari yang paling akhir", so we need to sort all entries.
-                    if (allEntries.length > 2000) break; // Limit total scan for performance
+                    if (allEntries.length >= page * limit + 200) break;
                 }
-                if (allEntries.length > 2000) break;
+                if (allEntries.length >= page * limit + 200) break;
             }
             
             // 2. Final sort

@@ -6,6 +6,10 @@ let authToken = localStorage.getItem('authToken') || null;
 let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 let equipmentData = [];
 let airportsData = [];
+let supCategoriesData = [];
+let authenticationsData = [];
+let configLimitationCache = [];
+let configAuthenticationCache = [];
 // Map Picker state
 let pickerMap = null;
 let pickerMarker = null;
@@ -330,9 +334,6 @@ document.getElementById('closeMapPickerModal')?.addEventListener('click', () => 
 });
 
 // --- NEW ISSUE #10 FUNCTIONS ---
-let authenticationsData = [];
-let supCategoriesData = [];
-
 async function loadAuthentications() {
   try {
     const res = await fetch(`${API_URL}/config/authentications`, { headers: getAuthHeaders() });
@@ -1581,6 +1582,67 @@ window.initConfigureNav = function () {
   }
 }
 
+// Filter for limitations
+function updateLimitationFilterOptions() {
+  const select = document.getElementById('filterLimitationSupCategory');
+  if (!select) return;
+
+  const currentFilter = select.value;
+  select.innerHTML = '<option value="">All Sub-Categories</option>';
+
+  // Get unique sup_categories from the data
+  const uniqueCategories = [...new Set(configLimitationCache.map(item => item.sup_category))].sort();
+
+  uniqueCategories.forEach(cat => {
+    const option = document.createElement('option');
+    option.value = cat;
+    option.textContent = cat;
+    if (cat === currentFilter) option.selected = true;
+    select.appendChild(option);
+  });
+
+  // Add event listener if not already added
+  if (!select.dataset.listenerAdded) {
+    select.addEventListener('change', () => {
+      const tbody = document.getElementById('configLimitationTableBody');
+      if (tbody) renderConfigTable('limitation', configLimitationCache, tbody);
+    });
+    select.dataset.listenerAdded = 'true';
+  }
+}
+
+// Filter for authentications
+function updateAuthenticationFilterOptions() {
+  const select = document.getElementById('filterAuthenticationLinkedEquipment');
+  if (!select) return;
+
+  const currentFilter = select.value;
+  select.innerHTML = '<option value="">All Equipment</option><option value="global">Global (No Link)</option>';
+
+  // Get unique equipt_ids from the data
+  const uniqueEquiptIds = [...new Set(configAuthenticationCache.map(item => item.equipt_id))].filter(Boolean);
+
+  uniqueEquiptIds.forEach(id => {
+    const equipt = (equipmentData || []).find(e => String(e.id) === String(id));
+    const name = equipt ? equipt.name : `ID: ${id}`;
+    
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = name;
+    if (String(id) === String(currentFilter)) option.selected = true;
+    select.appendChild(option);
+  });
+
+  // Add event listener if not already added
+  if (!select.dataset.listenerAdded) {
+    select.addEventListener('change', () => {
+      const tbody = document.getElementById('configAuthenticationTableBody');
+      if (tbody) renderConfigTable('authentication', configAuthenticationCache, tbody);
+    });
+    select.dataset.listenerAdded = 'true';
+  }
+}
+
 window.loadConfigData = async function (tab) {
   // Simple helper for dynamic tbody ID to avoid complex template literal
   const baseTab = tab.charAt(0).toUpperCase() + tab.slice(1);
@@ -1608,6 +1670,14 @@ window.loadConfigData = async function (tab) {
       return;
     }
 
+    if (tab === 'limitation') {
+      configLimitationCache = data;
+      updateLimitationFilterOptions();
+    } else if (tab === 'authentication') {
+      configAuthenticationCache = data;
+      updateAuthenticationFilterOptions();
+    }
+
     renderConfigTable(tab, data, tbody);
   } catch (err) {
     console.error('Config load error:', err);
@@ -1618,7 +1688,24 @@ window.loadConfigData = async function (tab) {
 window.renderConfigTable = function (tab, data, tbody) {
   tbody.innerHTML = '';
 
+  const filterValue = tab === 'limitation' ? document.getElementById('filterLimitationSupCategory')?.value : null;
+  const authEquiptFilter = tab === 'authentication' ? document.getElementById('filterAuthenticationLinkedEquipment')?.value : null;
+
   data.forEach(item => {
+    // Apply filter for limitations
+    if (tab === 'limitation' && filterValue && item.sup_category !== filterValue) {
+      return;
+    }
+
+    // Apply filter for authentication
+    if (tab === 'authentication' && authEquiptFilter) {
+      if (authEquiptFilter === 'global') {
+        if (item.equipt_id) return;
+      } else if (String(item.equipt_id) !== String(authEquiptFilter)) {
+        return;
+      }
+    }
+
     const tr = document.createElement('tr');
 
     if (tab === 'limitation') {

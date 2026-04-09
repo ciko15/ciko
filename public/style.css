@@ -4913,3 +4913,91 @@ tr.child-airport {
   align-items: center;
   justify-content: center;
 }
+
+/* Network Tools UI Enhancements */
+.hex-dump {
+  font-family: 'Fira Code', 'Ubuntu Mono', monospace;
+  line-height: 1.5;
+  color: #d4d4d4;
+  padding: 10px;
+}
+
+.hex-dump.mock-data {
+  opacity: 0.7;
+}
+
+.hex-dump.real-data {
+  opacity: 1;
+}
+
+.hex-row {
+  display: flex;
+  white-space: pre;
+  margin-bottom: 2px;
+}
+
+.hex-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hex-row .offset {
+  color: #858585;
+  margin-right: 15px;
+}
+
+.hex-row .hex {
+  color: #9cdcfe;
+  margin-right: 20px;
+}
+
+.hex-row .ascii {
+  color: #ce9178;
+}
+
+.analysis-box {
+  transition: all 0.3s ease;
+  animation: slideInDown 0.3s ease-out;
+}
+
+.analysis-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.protocol-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.packet-row.selected-packet {
+  background-color: rgba(59, 130, 246, 0.25) !important;
+  border-left: 4px solid #3b82f6;
+}
+
+.protocol-tcp { background: rgba(52, 152, 219, 0.2); color: #3498db; }
+.protocol-udp { background: rgba(155, 89, 182, 0.2); color: #9b59b6; }
+.protocol-http { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
+.protocol-https { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+.protocol-icmp { background: rgba(230, 126, 34, 0.2); color: #e67e22; }
+.protocol-arp { background: rgba(52, 73, 94, 0.2); color: #34495e; }
+
+[data-theme="light"] .hex-dump {
+    background: #f8f9fa;
+    color: #333;
+}
+[data-theme="light"] .hex-row .hex { color: #0056b3; }
+[data-theme="light"] .hex-row .ascii { color: #a94442; }

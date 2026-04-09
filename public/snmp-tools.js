@@ -1,6 +1,7 @@
 // SNMP Tools and Threshold Settings JavaScript Functions
 
 var liveDataTimer = window.liveDataTimer;
+const API_URL = '/api';
 
 // ============================================
 // SNMP TOOLS FUNCTIONS
@@ -187,8 +188,8 @@ async function loadThresholdSettings() {
   if (!select) return;
 
   // 🔐 cek login dulu
-  const token = localStorage.getItem('token');
-  if (!token) {
+  const authToken = localStorage.getItem('authToken');
+  if (!authToken) {
     console.log('Belum login, skip loadThresholdSettings');
     
     select.innerHTML = '<option value="">Silakan login terlebih dahulu</option>';

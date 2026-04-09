@@ -17,13 +17,25 @@ function authorize(allowedRoles: string[]) {
 }
 
 function authenticate(app: any) {
-    return app.derive(({ user, set }: any) => {
-        const userRole = user?.role;
-        if (!userRole) {
-            set.status = 401;
-            throw new Error('Authentication required');
+    return app.derive(({ set, request, query }: any) => {
+        let token = '';
+        const auth = request.headers.get('authorization');
+        
+        if (auth && auth.startsWith('Bearer ')) {
+            token = auth.substring(7);
+        } else if (query && query.token) {
+            token = query.token;
         }
-        return {};
+
+        if (token && token.startsWith('static-token-')) {
+            const parts = token.split('-');
+            const role = parts[2] || 'admin';
+            return { user: { role, username: 'Admin' } };
+        }
+        
+        console.warn(`[AUTH-GATE] Denied access to ${request.url} - Auth: ${auth ? 'Header' : (query?.token ? 'Query' : 'Missing')}`);
+        set.status = 401;
+        return { user: null, error: 'Authentication required', success: false };
     });
 }
 
@@ -74,31 +86,42 @@ async function collectEquipmentData() {
         const equipmentList = allEquipment.data || allEquipment;
 
         for (const item of equipmentList) {
+            // Only process active equipment
+            const isActive = item.isActive === true || item.isActive === 'true' || item.is_active === 1 || item.is_active === '1' || item.is_active === true;
+            if (!isActive) continue;
+
             const config = item.snmpConfig || item.snmp_config;
-            if (config?.enabled) {
-                try {
-                    const { parsedData, status, triggeredParameters } = await fetchAndParseData(item);
+            
+            try {
+                const { parsedData, status, triggeredParameters, isProcessed } = await fetchAndParseData(item);
+                
+                // Only update status and logs if we actually had sources to monitor
+                if (isProcessed) {
                     await db.updateEquipmentStatus(item.id, status);
                     await db.createEquipmentLog({
                         equipmentId: item.id,
                         data: { ...parsedData, status, triggeredParameters: triggeredParameters || [] },
-                        source: config.templateId || 'snmp'
+                        source: config?.templateId || 'ping_monitor'
                     });
 
-                    // File logging (new)
+                    // File logging
                     const fileLogger = require('./utils/fileLogger');
                     await fileLogger.log(item.name || `equip_${item.id}`, item.id, {
                         ...parsedData,
                         status,
                         triggeredParameters: triggeredParameters || [],
-                        _ip: parsedData._ip
+                        _ip: parsedData._ip || (parsedData._sources && parsedData._sources[0]?.ip)
                     });
-                } catch (err: any) {
-                    console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
+                }
+            } catch (err: any) {
+                console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
+                // If it's a critical failure for a monitored device, mark as Disconnect
+                if (config?.enabled) {
                     await db.updateEquipmentStatus(item.id, 'Disconnect');
                 }
             }
         }
+
     } catch (error) {
         console.error('[SCHEDULER] Error:', error);
     }
@@ -149,13 +172,11 @@ const app = new Elysia()
         const auth = request.headers.get('authorization');
         if (auth && auth.startsWith('Bearer ')) {
             const token = auth.substring(7);
-            // Handle static development token with embedded role
             if (token.startsWith('static-token-')) {
                 const parts = token.split('-');
                 const role = parts[2] || 'admin';
                 return { user: { role, username: 'Admin' } };
             }
-            // Future: Handle real JWT here
         }
         return { user: null };
     })
@@ -822,25 +843,60 @@ const app = new Elysia()
     })
 
     // --- NETWORK MONITORING ROUTES ---
-    .group('/api/network', (app) => {
-        const networkMonitor = require('./network/monitor');
-        return app.use(authenticate)
-            .get('/interfaces', async () => ({ success: true, data: await networkMonitor.getNetworkInterfaces() }))
-            .get('/stats', async () => ({ success: true, data: await networkMonitor.getNetworkStats() }))
-            .post('/ping', async ({ body }) => {
-                const { host, count } = body as any;
-                return { success: true, data: await networkMonitor.pingHost(host, count || 4) };
-            })
-            .post('/test-connectivity', async ({ body }) => {
-                const { hosts } = body as any;
-                return { success: true, data: await networkMonitor.testConnectivity(hosts || ['8.8.8.8', '1.1.1.1']) };
-            })
-            .get('/info', async () => ({ success: true, data: await networkMonitor.getSystemNetworkInfo() }))
-            .get('/arp-table', async () => ({ success: true, data: await networkMonitor.getArpTable() }))
-            .get('/discover-devices', async () => ({ success: true, data: await networkMonitor.discoverNetworkDevices() }))
-            .get('/local-info', async () => ({ success: true, data: await networkMonitor.getLocalNetworkInfo() }))
-            .get('/device-traffic', async () => ({ success: true, data: await networkMonitor.getDeviceTraffic() }))
-    })
+    // --- NETWORK MONITORING & SNIFFER ROUTES ---
+    .group('/api/network', app => app
+        .use(authenticate)
+        .get('/interfaces', async () => ({ success: true, data: await require('./network/monitor').getNetworkInterfaces() }))
+        .get('/ifstats', async () => ({ success: true, data: await require('./network/monitor').getInterfacesWithStats() }))
+        .get('/stats', async () => ({ success: true, data: await require('./network/monitor').getNetworkStats() }))
+        .post('/ping', async ({ body }) => {
+            const { host, count } = body as any;
+            return { success: true, data: await require('./network/monitor').pingHost(host, count || 4) };
+        })
+        .get('/sniffer/packets', ({ query }) => {
+            const sniffer = require('./network/sniffer');
+            return { success: true, data: sniffer.getPackets(query) };
+        })
+        .get('/sniffer/stats', () => {
+            const sniffer = require('./network/sniffer');
+            return { success: true, data: sniffer.getStatistics() };
+        })
+        .post('/sniffer/start', async ({ body }) => {
+            const sniffer = require('./network/sniffer');
+            const { interface: iface } = body as any;
+            await sniffer.start(iface);
+            return { success: true, mode: sniffer.captureMode };
+        })
+        .post('/sniffer/stop', () => {
+            const sniffer = require('./network/sniffer');
+            sniffer.stop();
+            return { success: true };
+        })
+        .post('/sniffer/clear', () => {
+            const sniffer = require('./network/sniffer');
+            sniffer.clear();
+            return { success: true };
+        })
+        .get('/local-info', async () => ({ success: true, data: await require('./network/monitor').getLocalNetworkInfo() }))
+        .get('/arp-table', async () => ({ success: true, data: await require('./network/monitor').getArpTable() }))
+        .get('/discover-devices', async () => ({ success: true, data: await require('./network/monitor').discoverNetworkDevices() }))
+    )
+
+    // --- PACKET EXPORT ROUTE ---
+    .group('/api/sniffer', app => app
+        .use(authenticate)
+        .get('/export', async ({ query, set }) => {
+            const sniffer = require('./network/sniffer');
+            const format = (query.format as string) || 'json';
+            const data = sniffer.export(format);
+            
+            if (format === 'csv') {
+                set.headers['Content-Type'] = 'text/csv';
+                set.headers['Content-Disposition'] = `attachment; filename=packets_${Date.now()}.csv`;
+            }
+            return data;
+        })
+    )
 
     // --- CONFIGURATION MANAGEMENT ROUTES (Issue #12) ---
     .group('/api/config', (app) =>
@@ -969,44 +1025,11 @@ const app = new Elysia()
                 }
             });
     })
-
-
-    // --- PACKET SNIFFER ROUTES ---
-
-    .group('/api/sniffer', (app) => {
-        const packetSniffer = require('./network/sniffer');
-        return app.use(authenticate)
-            .post('/start', async ({ body }) => {
-                const { interface: iface } = body as any;
-                await packetSniffer.start(iface);
-                return { success: true, message: 'Packet capture started' };
-            })
-            .post('/stop', () => {
-                packetSniffer.stop();
-                return { success: true, message: 'Packet capture stopped' };
-            })
-            .get('/packets', ({ query }) => ({ success: true, data: packetSniffer.getPackets(query) }))
-            .get('/stats', () => ({ success: true, data: packetSniffer.getStatistics() }))
-            .get('/packets/:number', ({ params, set }) => {
-                const details = packetSniffer.getPacketDetails(parseInt(params.number));
-                if (!details) {
-                    set.status = 404;
-                    return { success: false, error: 'Packet not found' };
-                }
-                return { success: true, data: details };
-            })
-            .post('/clear', () => {
-                packetSniffer.clear();
-                return { success: true, message: 'Packets cleared' };
-            })
-    })
-
     // Move Static Plugin to the END to avoid intercepting API calls
     .use(staticPlugin({ assets: 'public', prefix: '' }))
 
     // Root Dashboard Serving (Direct Bun file serving via Response)
     .get('/favicon.ico', () => (globalThis as any).Bun?.file('public/icon.png'))
-    .state('simulationMode', true)
 
     .get('/api/test-chain', () => {
         console.log('[DEBUG-ROUTER] Hit /api/test-chain');

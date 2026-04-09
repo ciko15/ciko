@@ -6,6 +6,7 @@ var liveDataTimer = window.liveDataTimer;
 let networkStats = [];
 let interfaceData = [];
 let trafficChart = null;
+let userLocalIP = null;
 
 // Initialize Network Monitoring Dashboard
 function initNetworkMonitor() {
@@ -357,6 +358,7 @@ function displayLocalNetworkInfo(info) {
     
     let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 0.95em;">';
     
+    userLocalIP = info.yourIP;
     html += `<div><strong>Your IP:</strong> <code style="background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px;">${info.yourIP}</code></div>`;
     html += `<div><strong>Your MAC:</strong> <code style="background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px;">${info.yourMAC}</code></div>`;
     html += `<div><strong>Interface:</strong> ${info.interface}</div>`;
@@ -420,10 +422,10 @@ function displayConnectedDevices(devices) {
       const hostname = device.hostname || device.name || device.Hostname || '-';
       const iface = device.interface || device.iface || device.ifaceName || device.Interface || '-';
       
-      const isYourDevice = ip === '192.168.0.36' ? 'style="background: rgba(34, 197, 94, 0.1); font-weight: 600;"' : '';
+      const isYourDevice = ip === userLocalIP ? 'style="background: rgba(34, 197, 94, 0.1); font-weight: 600;"' : '';
       
       html += `<tr ${isYourDevice}>
-        <td style="font-family: monospace; font-size: 0.9em;">${ip}</td>
+        <td style="font-family: monospace; font-size: 0.9em;">${ip}${ip === userLocalIP ? ' (Your Device)' : ''}</td>
         <td style="font-family: monospace; font-size: 0.85em;">${mac}</td>
         <td>${hostname}</td>
         <td>${iface}</td>
@@ -508,7 +510,7 @@ function displayDiscoveredDevices(data) {
       const mac = device.mac || device.mac_address || device.macAddress || device.MAC || '-';
       const hostname = device.hostname || device.name || device.Hostname || '-';
       
-      const isYourDevice = ip === '192.168.0.36';
+      const isYourDevice = ip === userLocalIP;
       const youLabel = isYourDevice ? ' (Your Device)' : '';
       const rowStyle = isYourDevice ? 'style="background: rgba(34, 197, 94, 0.1); font-weight: 600;"' : '';
       

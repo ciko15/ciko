@@ -1751,11 +1751,16 @@
                     <option value="DNS">DNS</option>
                   </select>
                 </div>
-                <div class="form-group">
-                  <label for="interfaceSelect">Interface</label>
-                  <select id="interfaceSelect" onchange="filterPackets()">
-                    <option value="">All Interfaces</option>
-                  </select>
+                <div class="form-group" style="flex: 1.5;">
+                  <label for="interfaceSelect">Network Interface (Select active one)</label>
+                  <div style="display: flex; gap: 8px;">
+                    <select id="interfaceSelect" onchange="filterPackets()" style="flex: 1;">
+                      <option value="">All Interfaces</option>
+                    </select>
+                    <button class="btn btn-outline btn-sm" onclick="loadNetworkInterfaces()" title="Refresh Interfaces">
+                      <i class="fas fa-sync-alt"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="form-actions" style="align-items: center; gap: 8px;">
@@ -1829,6 +1834,16 @@
             </div>
           </div>
 
+          <!-- Packet Analysis (NEW) -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h3><i class="fas fa-microscope"></i> Packet Content Analysis</h3>
+            </div>
+            <div class="card-body" id="packetAnalysisContent">
+              <div class="empty-state">Select a packet to perform content analysis</div>
+            </div>
+          </div>
+
           <!-- Hex Viewer -->
           <div class="card" style="margin-top: 20px;">
             <div class="card-header">
@@ -1837,6 +1852,26 @@
             <div class="card-body" id="hexViewerContent"
               style="max-height: 250px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 12px;">
               <div class="empty-state">Select a packet to view hex data</div>
+            </div>
+          </div>
+
+          <!-- Connected Devices Scanner (NEW) -->
+          <div class="card" style="margin-top: 20px;" id="deviceScanSection">
+            <div class="card-header">
+              <h3><i class="fas fa-sitemap"></i> Connected Devices</h3>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <span>Devices: <strong id="connectedDevicesCount">0</strong></span>
+                <button class="btn btn-primary" id="scanDevicesBtn" onclick="scanConnectedDevices()">
+                  <i class="fas fa-search"></i> Scan Network
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="arpDevicesSection">
+                <div class="empty-state" id="arpDevicesContent" style="padding: 20px; text-align: center;">
+                  Click "Scan Network" to discover all connected IPs/MACs
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1850,7 +1885,7 @@
             </div>
             <div class="card-body" id="networkToolsLog"
               style="max-height: 150px; overflow-y: auto; background: var(--bg-secondary); font-family: monospace; font-size: 0.85rem;">
-              <div class="log-entry info">[System] Network Tools initialized - Ready to capture</div>
+              <div class="log-entry info">[System] Network Tools initialized - Ready to capture real network traffic + scan devices</div>
             </div>
           </div>
         </div>
@@ -1896,11 +1931,16 @@
                 <div class="config-content-display">
                   <!-- Limitations Tab -->
                   <div id="configLimitationContent" class="config-content-item">
-                    <div class="card-header" style="border: none; padding-top: 0;">
-                      <h3><i class="fas fa-exclamation-triangle"></i> Standard Limitations (by Sub-Category)</h3>
-                      <button class="btn btn-primary btn-sm" onclick="showAddConfigModal('limitation')">
-                        <i class="fas fa-plus"></i> Add Limitation
-                      </button>
+                    <div class="card-header" style="border: none; padding-top: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                      <h3><i class="fas fa-exclamation-triangle"></i> Standard Limitations</h3>
+                      <div class="filter-group" style="display: flex; align-items: center; gap: 10px;">
+                        <select id="filterLimitationSupCategory" class="btn btn-outline btn-sm" style="background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer;">
+                          <option value="">All Sub-Categories</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="showAddConfigModal('limitation')">
+                          <i class="fas fa-plus"></i> Add Limitation
+                        </button>
+                      </div>
                     </div>
                     <div class="table-responsive">
                       <table class="config-table">
@@ -1924,11 +1964,17 @@
 
                   <!-- Authentication Tab -->
                   <div id="configAuthenticationContent" class="config-content-item hidden">
-                    <div class="card-header" style="border: none; padding-top: 0;">
+                    <div class="card-header" style="border: none; padding-top: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                       <h3><i class="fas fa-network-wired"></i> Global Components / IP Config</h3>
-                      <button class="btn btn-primary btn-sm" onclick="showAddConfigModal('authentication')">
-                        <i class="fas fa-plus"></i> Add Component
-                      </button>
+                      <div class="filter-group" style="display: flex; align-items: center; gap: 10px;">
+                        <select id="filterAuthenticationLinkedEquipment" class="btn btn-outline btn-sm" style="background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer;">
+                          <option value="">All Equipment</option>
+                          <option value="global">Global (No Link)</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="showAddConfigModal('authentication')">
+                          <i class="fas fa-plus"></i> Add Component
+                        </button>
+                      </div>
                     </div>
                     <div class="table-responsive">
                       <table class="config-table">

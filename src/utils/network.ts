@@ -179,36 +179,89 @@ export async function fetchAndParseData(equipment: any) {
     const config = equipment.snmpConfig || equipment.snmp_config;
     const templateId = config?.templateId;
     const ipAddress = equipment.ipAddress || (config ? config.ip : null);
-    const isBypassGateway = config?.bypassGateway === true;
 
-    // 1. PHASE 1: Direct Device Check (No Gateway)
-    if (!ipAddress || !isValidIP(ipAddress)) {
+    // 1. PHASE 1: Fetch Authentication/Sub-Sources for this equipment
+    let subSources = [];
+    try {
+        // Use equipment.id to find linked sources in equipment_otentication_config.json
+        subSources = await db.getOtenticationByEquipment(equipment.id);
+    } catch (e) {
+        console.error(`[AUTH-FETCH-ERROR] ${equipment.id}:`, e);
+    }
+
+    // 2. PHASE 2: Check Reachability for all sources
+    const sourceResults = [];
+    let aliveCount = 0;
+    let totalSourcesToCheck = 0;
+
+    // Check main IP if configured
+    if (ipAddress && isValidIP(ipAddress)) {
+        totalSourcesToCheck++;
+        const result = await pingHost(ipAddress, 2);
+        if (result.alive) aliveCount++;
+        sourceResults.push({ name: 'Primary', ip: ipAddress, alive: result.alive });
+    }
+
+    // Check all sub-sources from authentication config
+    for (const src of subSources) {
+        if (src.ip_address && isValidIP(src.ip_address)) {
+            totalSourcesToCheck++;
+            const result = await pingHost(src.ip_address, 2);
+            if (result.alive) aliveCount++;
+            sourceResults.push({ name: src.name || 'Sub-Source', ip: src.ip_address, alive: result.alive });
+        }
+    }
+
+    // Handle case where no IP is configured at all
+    if (totalSourcesToCheck === 0) {
         return { 
-            parsedData: { status: 'Disconnect', message: 'Invalid Device IP' }, 
-            status: 'Disconnect', 
-            triggeredParameters: ['ip'] 
+            parsedData: { status: 'Unknown', message: 'No IP or Sources Configured' }, 
+            status: 'Normal', // Don't flag as Disconnect if it's not meant to be monitored
+            triggeredParameters: [],
+            isProcessed: false
         };
     }
 
-    const devicePing = await pingHost(ipAddress, 2);
-    if (!devicePing.alive) {
-        return { 
-            parsedData: { status: 'Disconnect', message: 'Device Unreachable' }, 
-            status: 'Disconnect', 
-            triggeredParameters: ['device'] 
-        };
+    // Determine aggregate reachability status
+    let reachabilityStatus = 'Normal';
+    if (aliveCount === 0) {
+        reachabilityStatus = 'Disconnect';
+    } else if (aliveCount < totalSourcesToCheck) {
+        reachabilityStatus = 'Warning';
     }
 
-    // 2. PHASE 2: Fetch Raw Data (Simulated or Real)
-    // Real SNMP implementation
-    const rawData = { /* SNMP fetch placeholder */ };
-    const evalResult = await determineStatus(rawData, templateId || 'generic_snmp');
+    // 3. PHASE 3: SNMP Threshold Evaluation (if enabled and primary is alive)
+    const mainAlive = sourceResults.find(r => r.name === 'Primary')?.alive || (sourceResults.length > 0 && reachabilityStatus !== 'Disconnect');
+    
+    let rawData = { _ip: ipAddress, _sources: sourceResults };
+    let status = reachabilityStatus;
+    let triggeredParameters: string[] = [];
+
+    // If SNMP is enabled, we can fetch more detailed data and check thresholds
+    if (config?.enabled && mainAlive) {
+        // Here we would normally perform SNMP Get/Bulk
+        // Using existing determineStatus helper to check thresholds
+        const evalResult = await determineStatus(rawData, templateId || 'generic_snmp');
+        
+        // Status Priority: Disconnect (0) > Alert (3) > Warning (2) > Normal (1)
+        // We use a custom priority check to ensure Alert overrides Warning
+        const statusPriority: Record<string, number> = { 'Disconnect': 0, 'Alert': 3, 'Warning': 2, 'Normal': 1 };
+        
+        if (statusPriority[evalResult.status] > statusPriority[status]) {
+            status = evalResult.status;
+        }
+        triggeredParameters = evalResult.triggeredParameters;
+    }
+
     return { 
-        parsedData: { ...rawData, _ip: ipAddress }, 
-        status: evalResult.status, 
-        triggeredParameters: evalResult.triggeredParameters 
+        parsedData: { ...rawData, status }, 
+        status: status, 
+        triggeredParameters: triggeredParameters,
+        isProcessed: true
     };
 }
+
+
 
 /**
  * Determine status based on thresholds
