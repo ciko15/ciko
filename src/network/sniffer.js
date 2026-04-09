@@ -64,7 +64,14 @@ class PacketSniffer {
     const tsharkAvailable = await this.isTsharkAvailable();
     const tcpdumpAvailable = await this.isTcpdumpAvailable();
 
-    if (tsharkAvailable) {
+    const isMac = process.platform === 'darwin';
+    
+    // On Mac, tcpdump is much more reliable for real-time streaming than tshark json formats
+    if (isMac && tcpdumpAvailable) {
+      console.log(`[Packet Sniffer] Starting real capture using Tcpdump on ${this.currentInterface} (Reliable Mac Mode)`);
+      this.captureMode = 'tcpdump';
+      this.startTcpdumpCapture(this.currentInterface);
+    } else if (tsharkAvailable) {
       console.log(`[Packet Sniffer] Starting real capture using Tshark on ${this.currentInterface}`);
       this.captureMode = 'tshark';
       this.startTsharkCapture(this.currentInterface);
@@ -73,7 +80,9 @@ class PacketSniffer {
       this.captureMode = 'tcpdump';
       this.startTcpdumpCapture(this.currentInterface);
     } else {
-      console.log(`[Packet Sniffer] No capture tools found (tshark/tcpdump). Real capture is not possible.`);
+      const msg = `No capture tools found (tshark/tcpdump). Please install Wireshark or tcpdump.`;
+      console.error(`[Packet Sniffer] ${msg}`);
+      this.lastError = msg;
       this.captureMode = 'none';
       this.isActive = false;
     }
@@ -81,8 +90,12 @@ class PacketSniffer {
 
   startTcpdumpCapture(interfaceName) {
     try {
-      const args = ['-l', '-n', '-i', interfaceName, '-s', '0'];
-      this.tcpdumpProcess = spawn('tcpdump', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      // -x for hex, -s 96 for a small slice of data (enough for headers + some payload)
+      // -l for line-buffered, -n for no DNS lookups, -U for unbuffered
+      const args = ['-U', '-l', '-n', '-i', interfaceName, '-x', '-s', '256'];
+      const tcpdumpPath = process.platform === 'darwin' ? '/usr/sbin/tcpdump' : 'tcpdump';
+      console.log(`[Packet Sniffer] Spawning: ${tcpdumpPath} ${args.join(' ')}`);
+      this.tcpdumpProcess = spawn(tcpdumpPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
       let buffer = '';
       this.tcpdumpProcess.stdout.setEncoding('utf8');
@@ -94,11 +107,23 @@ class PacketSniffer {
 
         for (const line of lines) {
           if (!line.trim()) continue;
-          const packet = this.parseTcpdumpLine(line, interfaceName);
-          if (packet) {
-            this.packets.push(packet);
-            if (this.packets.length > 1000) {
-              this.packets.shift();
+          
+          if (/^\d{2}:\d{2}:\d{2}\.\d+/.test(line)) {
+            // New packet header
+            if (this.pendingPacket) {
+                this.finalizePacket(this.pendingPacket);
+            }
+            this.pendingPacket = this.parseTcpdumpLine(line, interfaceName);
+          } else if (this.pendingPacket && /^\s*(0x)?[0-9a-fA-F]{4}:/.test(line)) {
+            // Hex data line (usually starts with tab or spaces)
+            const cleanedLine = line.trim();
+            const hexMatch = cleanedLine.match(/^(?:0x)?[0-9a-fA-F]{4}:\s+(.*)$/);
+            if (hexMatch) {
+                // Remove spaces and any trailing ASCII (in case -X was used instead of -x)
+                // We take only the hex part - usually grouped in 4-character blocks
+                const hexPart = hexMatch[1].split('  ')[0]; // Split from ASCII part if present
+                const hexData = hexPart.replace(/\s+/g, '');
+                this.pendingPacket.rawData += hexData;
             }
           }
         }
@@ -106,12 +131,24 @@ class PacketSniffer {
 
       this.tcpdumpProcess.stderr.setEncoding('utf8');
       this.tcpdumpProcess.stderr.on('data', data => {
-        const errorMsg = data.toString().trim();
-        console.warn('[Packet Sniffer] tcpdump:', errorMsg);
+        const msg = data.toString().trim();
+        console.log('[Packet Sniffer] tcpdump stderr:', msg);
+        
+        // Distinguish between info/preamble and actual errors
+        const isPreamble = msg.includes('verbose output suppressed') || 
+                          msg.includes('listening on') || 
+                          msg.includes('packets captured') ||
+                          msg.includes('packets received by filter');
+        
+        if (isPreamble) {
+            // Log as info, don't set as the "lastError" used for UI warnings
+            return;
+        }
+
         if (!this.lastError) {
-          this.lastError = errorMsg;
-        } else if (!this.lastError.includes(errorMsg)) {
-          this.lastError += '\n' + errorMsg;
+          this.lastError = msg;
+        } else if (!this.lastError.includes(msg)) {
+          this.lastError += '\n' + msg;
         }
       });
 
@@ -123,13 +160,25 @@ class PacketSniffer {
 
       this.tcpdumpProcess.on('error', error => {
         console.error('[Packet Sniffer] tcpdump error:', error.message);
+        this.lastError = `Process error: ${error.message}`;
         this.tcpdumpProcess = null;
         this.isActive = false;
       });
     } catch (error) {
       console.error('[Packet Sniffer] Failed to start tcpdump:', error);
+      this.lastError = `Catch error: ${error.message}`;
       this.isActive = false;
     }
+  }
+
+  finalizePacket(packet) {
+      if (packet) {
+          this.packets.push(packet);
+          if (this.packets.length > 1000) {
+              this.packets.shift();
+          }
+      }
+      this.pendingPacket = null;
   }
 
   parseTcpdumpLine(line, interfaceName) {
@@ -143,17 +192,39 @@ class PacketSniffer {
         destination: 'unknown',
         protocol: 'UNKNOWN',
         length: 0,
-        info: line,
+        info: line.trim(),
         direction: 'in',
         rawData: ''
       };
 
+      // More flexible regex to handle various tcpdump outputs (IP or hostname)
       const match = line.match(/^(\d{2}:\d{2}:\d{2}\.\d+)\s+(\S+)\s+(.+?)\s+>\s+(.+?):\s*(.*)$/);
       if (match) {
         packet.protocol = match[2];
         packet.source = match[3];
         packet.destination = match[4];
         packet.info = match[5];
+      } else {
+          // Fallback regex for simpler formats (like ARP)
+          const simpleMatch = line.match(/^(\d{2}:\d{2}:\d{2}\.\d+)\s+(.*)$/);
+          if (simpleMatch) {
+              const info = simpleMatch[2];
+              packet.info = info;
+              
+              // Guess protocol from info string
+              if (info.includes('ARP')) packet.protocol = 'ARP';
+              else if (info.includes('ICMP')) packet.protocol = 'ICMP';
+              else if (info.includes('IGMP')) packet.protocol = 'IGMP';
+              
+              // Try to extract source/destination for ARP
+              if (info.includes('ARP')) {
+                  const arpMatch = info.match(/(Request who-has|Reply)\s+([0-9.]+)/);
+                  if (arpMatch) {
+                      packet.source = arpMatch[2];
+                      packet.destination = info.includes('tell') ? info.split('tell')[1].trim().split(',')[0] : 'broadcast';
+                  }
+              }
+          }
       }
 
       const lengthMatch = line.match(/length\s+(\d+)/);
@@ -181,51 +252,29 @@ class PacketSniffer {
 
   startTsharkCapture(interfaceName) {
     try {
-      const args = ['-l', '-n', '-i', interfaceName, '-T', 'json'];
+      // Reverting to Tab-separated fields for Tshark as it's more lightweight if working
+      const args = ['-l', '-n', '-i', interfaceName, '-T', 'fields', 
+                    '-e', 'frame.number', '-e', 'frame.time_relative', 
+                    '-e', '_ws.col.Protocol', '-e', 'ip.src', '-e', 'ip.dst', 
+                    '-e', 'frame.len', '-e', 'frame.info'];
+      console.log(`[Packet Sniffer] Spawning Tshark: tshark ${args.join(' ')}`);
       this.tsharkProcess = spawn('tshark', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
       let buffer = '';
-      let braceDepth = 0;
-      let currentObject = '';
-
       this.tsharkProcess.stdout.setEncoding('utf8');
 
       this.tsharkProcess.stdout.on('data', chunk => {
         buffer += chunk;
-        
-        // Faster parsing: find JSON objects by looking for complete { ... } patterns
-        // Note: tshark -T json outputs a single array [ {obj}, {obj} ]
-        // We can split by '}\n  ,' or '}\n]' or similar
-        
-        let startIdx = buffer.indexOf('{');
-        while (startIdx !== -1) {
-            // Find the potential end of the object
-            // This is a simplification but much faster than character loop
-            // In tshark -T json, objects are nicely formatted with newlines
-            let endIdx = buffer.indexOf('}\n', startIdx);
-            if (endIdx === -1) break; // Incomplete object
-            
-            const potentialJson = buffer.substring(startIdx, endIdx + 1);
-            try {
-                const obj = JSON.parse(potentialJson);
-                const packet = this.parseTsharkJsonPacket(obj, interfaceName);
-                if (packet) {
-                    this.packets.push(packet);
-                    if (this.packets.length > 1000) this.packets.shift();
-                }
-                buffer = buffer.substring(endIdx + 1);
-                startIdx = buffer.indexOf('{');
-            } catch (err) {
-                // If it wasn't valid JSON, maybe the } wasn't the real end
-                // We search for the next possible }
-                startIdx = buffer.indexOf('{', startIdx + 1);
-            }
-        }
-        
-        // Prevent buffer from growing indefinitely if we can't find valid JSON
-        if (buffer.length > 50000) {
-            const lastStart = buffer.lastIndexOf('{');
-            buffer = lastStart !== -1 ? buffer.substring(lastStart) : '';
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const packet = this.parseTsharkLine(line, interfaceName);
+          if (packet) {
+            this.packets.push(packet);
+            if (this.packets.length > 1000) this.packets.shift();
+          }
         }
       });
 
@@ -272,59 +321,33 @@ class PacketSniffer {
     }
   }
 
-  parseTsharkJsonPacket(obj, interfaceName) {
-    try {
-      const layers = obj._source?.layers;
-      if (!layers) return null;
+  parseTsharkLine(line, interfaceName) {
+    const fields = line.split('\t');
+    if (fields.length < 5) return null;
 
-      const packet = {
-        number: ++this.packetCounter,
-        time: Date.now() / 1000,
-        interface: interfaceName || 'any',
-        source: 'unknown',
-        destination: 'unknown',
-        protocol: 'UNKNOWN',
-        length: 0,
-        info: '',
-        direction: 'in',
-        rawData: ''
-      };
+    const packet = {
+      number: parseInt(fields[0], 10) || ++this.packetCounter,
+      time: parseFloat(fields[1]) || Date.now() / 1000,
+      interface: interfaceName || 'any',
+      protocol: (fields[2] || 'UNKNOWN').toUpperCase(),
+      source: fields[3] || 'unknown',
+      destination: fields[4] || 'unknown',
+      length: parseInt(fields[5], 10) || 0,
+      info: fields[6] || line,
+      direction: 'in'
+    };
 
-      if (layers.frame) {
-        packet.time = parseFloat(layers.frame['frame.time_epoch'] || packet.time);
-        packet.length = parseInt(layers.frame['frame.len'] || packet.length, 10) || packet.length;
-      }
-
-      if (layers.ip) {
-        packet.source = layers.ip['ip.src'] || packet.source;
-        packet.destination = layers.ip['ip.dst'] || packet.destination;
-        packet.protocol = layers.ip['ip.proto'] || packet.protocol;
-      }
-
-      if (layers.tcp) {
-        packet.protocol = 'TCP';
-        packet.info = layers.tcp['tcp.analysis'] || layers.tcp['tcp.flags'] || '';
-      } else if (layers.udp) {
-        packet.protocol = 'UDP';
-        packet.info = layers.udp['udp.length'] || '';
-      } else if (layers.icmp) {
-        packet.protocol = 'ICMP';
-      }
-
-      if (!packet.info) {
-        packet.info = obj._source?.layers?.frame?.['frame.marked'] || '';
-      }
-
-      return packet;
-    } catch (error) {
-      console.error('[Packet Sniffer] Parse tshark packet error:', error);
-      return null;
-    }
+    return packet;
   }
 
   stop() {
     if (!this.isActive) return;
 
+    // Finalize any pending packet before stopping
+    if (this.pendingPacket) {
+        this.finalizePacket(this.pendingPacket);
+    }
+    
     this.isActive = false;
 
     this.stopTcpdump();

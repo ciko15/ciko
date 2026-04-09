@@ -1,14 +1,16 @@
-// Network Tools - Real Network Analytics
-// Uses backend API to capture and analyze real network packets from your system
+// Network Tools - Real Network Analytics + Connected Devices Scanner
+// Uses backend API to capture packets + scan ARP table / ping sweep for connected IPs
 
-let capturedPackets = [];
-let filteredPackets = [];
-let isCapturing = false;
-let packetCounter = 0;
-let captureUpdateInterval = null;
-let captureModeInterval = null;
-let availableInterfaces = [];
-let lastCaptureError = null;
+let capturedPacketsSize = 1000;
+window.capturedPackets = [];
+window.filteredPackets = [];
+window.isCapturing = false;
+window.packetCounter = 0;
+window.captureUpdateInterval = null;
+window.captureModeInterval = null;
+window.interfacePollingInterval = null;
+window.availableInterfaces = [];
+window.lastCaptureError = null;
 
 // Initialize Network Tools
 function initNetworkTools() {
@@ -26,10 +28,33 @@ function initNetworkTools() {
     updateCaptureStatus();
     updatePacketCount();
     
-    // Load network interfaces
+    // Load network interfaces and start polling
     loadNetworkInterfaces();
+    startInterfacePolling();
+    
+    // Initialize device scanner section
+    const deviceScanSection = document.getElementById('deviceScanSection');
+    if (deviceScanSection) {
+      deviceScanSection.style.display = 'block';
+    }
     
     addLogEntry('System', 'Network Tools initialized - Ready to capture real network traffic', 'info');
+    
+    // Set up event delegation for packet list clicks
+    const tbody = document.getElementById('packetListBody');
+    if (tbody) {
+        tbody.addEventListener('click', (e) => {
+            const row = e.target.closest('.packet-row');
+            if (row && row.dataset.number) {
+                // Clear previous selection
+                document.querySelectorAll('.packet-row').forEach(r => r.classList.remove('selected-packet'));
+                // Highlight current row
+                row.classList.add('selected-packet');
+                // Display details
+                displayPacketDetails(row.dataset.number);
+            }
+        });
+    }
   } catch (error) {
     console.error('[Network Tools] Initialization error:', error);
     addLogEntry('Error', `Initialization failed: ${error.message}`, 'error');
@@ -39,38 +64,113 @@ function initNetworkTools() {
 // Load and display network interfaces
 async function loadNetworkInterfaces() {
   try {
-    const response = await fetch('/api/network/interfaces', { headers: getAuthHeaders() });
+    const headers = getAuthHeaders();
+    if (!headers.Authorization) {
+        console.warn('[Network Tools] No Authorization header found. API call may fail.');
+    }
+    const response = await fetch('/api/network/ifstats', { headers });
+    
+    if (response.status === 401) {
+        throw new Error('Unauthorized - Please log in again');
+    }
     const result = await response.json();
 
     if (result.success && result.data) {
       const interfaces = result.data;
+      console.log(`[Network Tools] Received ${interfaces.length} interfaces:`, interfaces);
       availableInterfaces = interfaces;
 
       const interfaceSelect = document.getElementById('interfaceSelect');
       if (interfaceSelect) {
-        interfaceSelect.innerHTML = '<option value="">All Interfaces</option>';
-        interfaces.forEach(iface => {
-          const ifaceName = iface.name || iface.iface || iface.ifaceName;
-          const option = document.createElement('option');
-          option.value = ifaceName;
-          option.textContent = `${ifaceName} (${iface.operstate || iface.type || 'unknown'})`;
-          interfaceSelect.appendChild(option);
+        // Build new options list
+        const optionsToAdd = interfaces.map(iface => {
+          const ifaceName = iface.name || iface.iface || iface.interface || iface.ifaceName;
+          if (!ifaceName) return null;
+          
+          const rx = iface.rxRate ? (iface.rxRate > 1024 ? (iface.rxRate/1024).toFixed(1) + ' MB/s' : iface.rxRate.toFixed(1) + ' KB/s') : '0 KB/s';
+          const tx = iface.txRate ? (iface.txRate > 1024 ? (iface.txRate/1024).toFixed(1) + ' MB/s' : iface.txRate.toFixed(1) + ' KB/s') : '0 KB/s';
+          const trafficInfo = (iface.rxRate > 0 || iface.txRate > 0) ? ` - Traffic: [RX: ${rx}, TX: ${tx}]` : '';
+          
+          let icon = '🔌';
+          const name = ifaceName.toLowerCase();
+          if (name.includes('wlan') || name.includes('wifi') || name.startsWith('wl') || name.startsWith('en1')) {
+              icon = '📡';
+          }
+
+          return {
+              value: ifaceName,
+              text: `${icon} ${ifaceName} (${iface.operstate || iface.type || 'unknown'})${trafficInfo}`
+          };
+        }).filter(Boolean);
+
+        const currentSelection = interfaceSelect.value;
+        const allInterfacesOption = interfaceSelect.options[0];
+        
+        // Clear and rebuild to ensure accuracy
+        interfaceSelect.innerHTML = '';
+        interfaceSelect.appendChild(allInterfacesOption);
+        
+        optionsToAdd.forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.value;
+            el.textContent = opt.text;
+            interfaceSelect.appendChild(el);
         });
 
-        // Default to the first non-loopback interface (e.g. en0) for macOS
-        const preferred = interfaces.find(i => {
-          const name = (i.name || i.iface || i.ifaceName || '').toLowerCase();
-          return name && !name.startsWith('lo') && !name.startsWith('awdl');
-        }) || interfaces[0];
-        
-        if (preferred) {
-          interfaceSelect.value = preferred.name || preferred.iface || preferred.ifaceName || '';
+        // Restore selection
+        if (currentSelection) {
+            interfaceSelect.value = currentSelection;
+        }
+
+        // Auto-select logic (only if no current choice)
+        if (!interfaceSelect.value) {
+          const active = interfaces
+            .filter(i => {
+                const n = (i.name || '').toLowerCase();
+                return n && !n.startsWith('lo') && !n.startsWith('awdl');
+            })
+            .sort((a, b) => (b.rxRate + b.txRate) - (a.rxRate + a.txRate))[0];
+          
+          if (active && (active.rxRate > 0 || active.txRate > 0)) {
+            interfaceSelect.value = active.name;
+          } else {
+            const preferred = interfaces.find(i => {
+              const name = (i.name || '').toLowerCase();
+              return name && !name.startsWith('lo') && !name.startsWith('awdl');
+            }) || interfaces[0];
+            
+            if (preferred) {
+              interfaceSelect.value = preferred.name || '';
+            }
+          }
         }
       }
     }
   } catch (error) {
     console.error('[Network Tools] Error loading interfaces:', error);
+    if (error.message.includes('Unauthorized')) {
+        addLogEntry('System', 'Authentication expired. Please log in to see network interfaces.', 'warning');
+    }
   }
+}
+
+function startInterfacePolling() {
+    if (interfacePollingInterval) return;
+    interfacePollingInterval = setInterval(() => {
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        const isInteracting = interfaceSelect === document.activeElement;
+        
+        if (!isCapturing && !isInteracting && (document.getElementById('network-toolsSection')?.classList.contains('active') || true)) {
+            loadNetworkInterfaces();
+        }
+    }, 5000);
+}
+
+function stopInterfacePolling() {
+    if (interfacePollingInterval) {
+        clearInterval(interfacePollingInterval);
+        interfacePollingInterval = null;
+    }
 }
 
 // Start capturing packets
@@ -85,13 +185,14 @@ async function startCapture() {
     lastCaptureError = null;
     
     addLogEntry('System', 'Starting real network packet capture...', 'info');
+    stopInterfacePolling();
     
     // Determine selected interface
     const interfaceSelect = document.getElementById('interfaceSelect');
     let selectedInterface = interfaceSelect?.value || '';
 
     // Start packet capture on backend
-    const response = await fetch('/api/sniffer/start', {
+    const response = await fetch('/api/network/sniffer/start', {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ interface: selectedInterface })
@@ -119,21 +220,21 @@ async function startCapture() {
 // Update captured data from backend
 async function updateCaptureData() {
   try {
-    if (!isCapturing) return;
+    if (!window.isCapturing) return;
     
-    const response = await fetch('/api/sniffer/packets', { headers: getAuthHeaders() });
+    const response = await fetch('/api/network/sniffer/packets', { headers: getAuthHeaders() });
     const result = await response.json();
     
     if (result.success && result.data) {
       const newPackets = result.data;
-      const prevCount = capturedPackets.length;
+      const prevCount = window.capturedPackets.length;
       
-      capturedPackets = newPackets;
+      window.capturedPackets = newPackets;
       
-      if (capturedPackets.length > prevCount) {
+      if (window.capturedPackets.length > prevCount) {
         // Apply filters and update display
         applyFilters();
-      } else if (capturedPackets.length === 0) {
+      } else if (window.capturedPackets.length === 0) {
         // Still empty, update display and check for errors immediately
         updateCaptureStatus();
         displayPackets();
@@ -157,9 +258,10 @@ async function stopCapture() {
     
     addLogEntry('System', 'Packet capture stopped', 'info');
     updateCaptureStatus();
+    startInterfacePolling();
     
     // Stop capture on backend
-    await fetch('/api/sniffer/stop', { 
+    await fetch('/api/network/sniffer/stop', { 
       method: 'POST',
       headers: getAuthHeaders()
     });
@@ -175,7 +277,7 @@ function applyFilters() {
     const protocolFilter = (document.getElementById('protocolFilter')?.value || '').trim();
     const interfaceFilter = (document.getElementById('interfaceSelect')?.value || '').trim();
 
-    filteredPackets = capturedPackets.filter(packet => {
+    window.filteredPackets = window.capturedPackets.filter(packet => {
       const proto = (packet.protocol || '').toString();
       const iface = (packet.interface || '').toString();
       const src = (packet.source || '').toString().toLowerCase();
@@ -212,25 +314,25 @@ function displayPackets() {
     if (!tbody) return;
     
     // Handle empty states with specific messaging
-    if (capturedPackets.length === 0) {
+    if (window.capturedPackets.length === 0) {
       let message = "No packets captured yet. Start capture to begin analyzing network traffic.";
-      if (isCapturing) {
+      if (window.isCapturing) {
         message = '<div class="spinner-inline"></div> Waiting for network traffic...';
       }
-      if (lastCaptureError) {
-        message = `<span class="error-text"><i class="fas fa-exclamation-triangle"></i> Capture Error: ${lastCaptureError}</span>`;
+      if (window.lastCaptureError) {
+        message = `<span class="error-text"><i class="fas fa-exclamation-triangle"></i> Capture Error: ${window.lastCaptureError}</span>`;
       }
       tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${message}</td></tr>`;
       return;
     }
     
-    if (filteredPackets.length === 0) {
+    if (window.filteredPackets.length === 0) {
       tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><i class="fas fa-filter"></i> No packets match your filter criteria.</td></tr>';
       return;
     }
     
-    tbody.innerHTML = filteredPackets.map(packet => `
-      <tr onclick="displayPacketDetails(${packet.number})" style="cursor: pointer;" class="packet-row">
+    tbody.innerHTML = window.filteredPackets.map(packet => `
+      <tr data-number="${packet.number}" style="cursor: pointer;" class="packet-row">
         <td>${packet.number}</td>
         <td>${(Number(packet.time) || 0).toFixed(3)}s</td>
         <td>${packet.interface || '-'}</td>
@@ -249,8 +351,16 @@ function displayPackets() {
 // Display details for a specific packet
 function displayPacketDetails(packetNumber) {
   try {
-    const packet = capturedPackets.find(p => p.number === packetNumber);
-    if (!packet) return;
+    // Convert to string for robust matching (backend might send number, HTML dataset is always string)
+    const targetNumber = String(packetNumber);
+    const packet = window.capturedPackets.find(p => String(p.number) === targetNumber);
+    
+    console.log(`[Network Tools] Displaying details for packet #${targetNumber}. Found:`, !!packet);
+
+    if (!packet) {
+        console.warn(`[Network Tools] Packet #${targetNumber} not found in buffer (current buffer size: ${window.capturedPackets.length})`);
+        return;
+    }
     
     const detailsContent = document.getElementById('packetDetailsContent');
     if (!detailsContent) return;
@@ -278,6 +388,7 @@ function displayPacketDetails(packetNumber) {
     `;
     
     displayHexViewer(packet);
+    analyzePacketContent(packet);
   } catch (error) {
     console.error('[Network Tools] Display details error:', error);
   }
@@ -289,15 +400,20 @@ function displayHexViewer(packet) {
     if (!hexContent) return;
     
     let rawData = packet.rawData || "";
+    let isMock = false;
     if (!rawData) {
         // Generate mock hex for visualization if raw data is missing
+        isMock = true;
         for (let i = 0; i < Math.min(packet.length, 64); i++) {
             rawData += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
         }
     }
     
     const bytes = rawData.match(/.{1,2}/g) || [];
-    let hexHtml = '<div class="hex-dump">';
+    let hexHtml = `<div class="hex-dump ${isMock ? 'mock-data' : 'real-data'}">`;
+    if (isMock) {
+        hexHtml += `<div style="color: var(--text-muted); font-size: 0.8em; margin-bottom: 5px;"><i class="fas fa-info-circle"></i> Showing mock data (real payload not captured)</div>`;
+    }
     
     for (let i = 0; i < bytes.length; i += 16) {
         const rowBytes = bytes.slice(i, i + 16);
@@ -318,7 +434,201 @@ function displayHexViewer(packet) {
   }
 }
 
-// Export and Actions
+// New packet content analysis logic
+function analyzePacketContent(packet) {
+    try {
+        const analysisContent = document.getElementById('packetAnalysisContent');
+        if (!analysisContent) return;
+
+        const info = (packet.info || '').toLowerCase();
+        const raw = (packet.rawData || '').toLowerCase();
+        const protocol = (packet.protocol || '').toUpperCase();
+
+        let prediction = 'Unknown Application Data';
+        let detail = 'Encrypted or proprietary binary data stream.';
+        let icon = 'fa-question-circle';
+        let color = 'gray';
+
+        // Identification logic
+        if (protocol === 'ARP') {
+            prediction = 'Address Resolution Protocol';
+            detail = 'Mapping network addresses to hardware addresses (Local network discovery).';
+            icon = 'fa-search-location';
+            color = '#3498db';
+        } else if (info.includes('quic') || info.includes('dcid')) {
+            prediction = 'Google/QUIC Encrypted Traffic';
+            detail = 'Modern high-speed encrypted data (Web browsing, YouTube, Google Services).';
+            icon = 'fa-shield-alt';
+            color = '#2ecc71';
+        } else if (raw.startsWith('47') && raw.length > 10) {
+            prediction = 'MPEG-TS Video stream';
+            detail = 'Video or audio broadcast data detected via sync byte 0x47.';
+            icon = 'fa-video';
+            color = '#e67e22';
+        } else if (protocol === 'DNS' || info.includes('53')) {
+            prediction = 'DNS Query/Response';
+            detail = 'Resolving domain names to IP addresses.';
+            icon = 'fa-globe';
+            color = '#9b59b6';
+        } else if (protocol === 'HTTP' || info.includes('80')) {
+            prediction = 'Hypertext Transfer Protocol';
+            detail = 'Unencrypted web traffic or API communication.';
+            icon = 'fa-globe-americas';
+            color = '#f1c40f';
+        } else if (info.includes('tls') || info.includes('443') || raw.startsWith('1603')) {
+            prediction = 'Secure Handshake / TLS';
+            detail = 'Encrypted secure communication (HTTPS, SSL).';
+            icon = 'fa-lock';
+            color = '#27ae60';
+        } else if (protocol === 'SNMP') {
+            prediction = 'SNMP Management Traffic';
+            detail = 'Managing or monitoring network-attached devices.';
+            icon = 'fa-desktop';
+            color = '#e74c3c';
+        } else if (protocol === 'ICMP') {
+            prediction = 'Network Control Message (Ping)';
+            detail = 'Testing connectivity or reporting network errors.';
+            icon = 'fa-heartbeat';
+            color = '#f39c12';
+        } else if (info.includes('mdns') || info.includes('5353')) {
+            prediction = 'Multicast DNS (Local Discovery)';
+            detail = 'Devices identifying themselves on the local network (Apple Bonjour, Chromecast).';
+            icon = 'fa-project-diagram';
+            color = '#d35400';
+        }
+
+        analysisContent.innerHTML = `
+            <div class="analysis-box" style="border-left: 5px solid ${color}; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas ${icon}" style="font-size: 2em; color: ${color};"></i>
+                    <div>
+                        <h4 style="margin: 0; color: ${color};">${prediction}</h4>
+                        <p style="margin: 5px 0 0; font-size: 0.9em; opacity: 0.8;">${detail}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('[Network Tools] Analysis error:', error);
+    }
+}
+
+// === CONNECTED DEVICES SCANNER (NEW) ===
+// Scan for connected devices using ARP + ping sweep
+let connectedDevices = [];
+let isScanningDevices = false;
+
+async function scanConnectedDevices() {
+  try {
+    if (isScanningDevices) return;
+    isScanningDevices = true;
+
+    const scanBtn = document.getElementById('scanDevicesBtn');
+    const arpSection = document.getElementById('arpDevicesSection');
+    
+    if (scanBtn) {
+      scanBtn.disabled = true;
+      scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+    }
+
+    addLogEntry('Scanner', 'Scanning local network for connected devices...', 'info');
+
+    // Get ARP table (cached devices)
+    const arpResponse = await fetch('/api/network/arp-table', { headers: getAuthHeaders() });
+    const arpResult = await arpResponse.json();
+    
+    // Scan active devices (ping sweep)
+    const discoverResponse = await fetch('/api/network/discover-devices', { headers: getAuthHeaders() });
+    const discoverResult = await discoverResponse.json();
+
+    if (arpResult.success) {
+      connectedDevices = arpResult.data || [];
+    }
+    
+    if (discoverResult.success) {
+      // Merge ARP + discovered (active) devices
+      const activeDevices = discoverResult.data.devices || [];
+      connectedDevices = connectedDevices.concat(activeDevices.filter(d => 
+        !connectedDevices.some(c => c.ip === d.ip)
+      ));
+    }
+
+    displayConnectedDevicesTable();
+    updateDeviceCount();
+
+    addLogEntry('Scanner', `Found ${connectedDevices.length} connected devices`, 'success');
+
+  } catch (error) {
+    console.error('[Network Tools] Device scan error:', error);
+    addLogEntry('Error', `Scan failed: ${error.message}`, 'error');
+  } finally {
+    isScanningDevices = false;
+    const scanBtn = document.getElementById('scanDevicesBtn');
+    if (scanBtn) {
+      scanBtn.disabled = false;
+      scanBtn.innerHTML = '<i class="fas fa-search"></i> Scan Devices';
+    }
+  }
+}
+
+function displayConnectedDevicesTable() {
+  const arpContent = document.getElementById('arpDevicesContent');
+  if (!arpContent) return;
+
+  if (connectedDevices.length === 0) {
+    arpContent.innerHTML = '<div class="empty-state">No connected devices found. Click "Scan Network" to discover all connected IPs/MACs</div>';
+    return;
+  }
+
+  let html = '<table class="monitor-table"><thead><tr>' +
+    '<th>IP Address</th><th>MAC Address</th><th>Hostname</th><th>Status</th>' +
+    '</tr></thead><tbody>';
+
+  connectedDevices.forEach(device => {
+    const isYou = device.ip === (window.yourLocalIP || ''); // Set from local-info if available
+    const rowClass = isYou ? 'your-device' : '';
+    
+    html += `<tr class="${rowClass}">
+      <td style="font-family: monospace; font-weight: ${isYou ? 'bold' : 'normal'};">
+        ${device.ip}${isYou ? ' (You)' : ''}
+      </td>
+      <td style="font-family: monospace; font-size: 0.85em;">${device.mac || '-'}</td>
+      <td>${device.hostname || '-'}</td>
+      <td><span class="status-up">✅ Active</span></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  arpContent.innerHTML = html;
+}
+
+function updateDeviceCount() {
+  const countEl = document.getElementById('connectedDevicesCount');
+  if (countEl) {
+    countEl.textContent = connectedDevices.length;
+  }
+}
+
+// === ORIGINAL EXPORT AND ACTIONS ===
+    // Load local network info (for "your device" highlighting)
+    async function loadLocalInfo() {
+      try {
+        const response = await fetch('/api/network/local-info', { headers: getAuthHeaders() });
+        const result = await response.json();
+        if (result.success && result.data) {
+          window.yourLocalIP = result.data.yourIP;
+        }
+      } catch (error) {
+        console.warn('[Network Tools] Local info unavailable');
+      }
+    }
+    
+    // Initialize device scanner (only if logged in)
+    if (localStorage.getItem('authToken')) {
+      loadLocalInfo();
+    }
+    
+    // Export and Actions
 async function clearCapture() {
   try {
     const confirmed = confirm('Clear all captured packets?');
@@ -331,21 +641,36 @@ async function clearCapture() {
     displayPackets();
     updatePacketCount();
     
-    await fetch('/api/sniffer/clear', { method: 'POST', headers: getAuthHeaders() });
+    await fetch('/api/network/sniffer/clear', { method: 'POST', headers: getAuthHeaders() });
     addLogEntry('System', 'All packets cleared', 'info');
   } catch (error) {
     console.error('[Network Tools] Clear capture error:', error);
   }
 }
 
+
 async function exportPackets() {
   try {
     if (capturedPackets.length === 0) return;
     const format = document.getElementById('exportFormat')?.value || 'json';
-    window.open(`/api/sniffer/export?format=${format}&token=${localStorage.getItem('token')}`, '_blank');
+    window.open(`/api/sniffer/export?format=${format}&token=${localStorage.getItem('authToken')}`, '_blank');
   } catch (error) {
     console.error('[Network Tools] Export error:', error);
   }
+}
+
+// Export connected devices list
+async function exportDevices() {
+  if (connectedDevices.length === 0) return;
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    totalDevices: connectedDevices.length,
+    devices: connectedDevices
+  }, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `connected-devices-${Date.now()}.json`);
+  downloadAnchor.click();
 }
 
 // UI Helpers
@@ -360,12 +685,19 @@ async function updateCaptureStatus() {
     if (stats) {
         isCapturing = stats.isCapturing;
         if (stats.lastError) {
-            lastCaptureError = stats.lastError;
-            addLogEntry('Error', `Backend Error: ${lastCaptureError}`, 'error');
-            // Force refresh packet list to show error
-            displayPackets();
+            if (lastCaptureError !== stats.lastError) {
+                lastCaptureError = stats.lastError;
+                addLogEntry('Capture', `Error: ${lastCaptureError}`, 'error');
+                // Force refresh packet list to show error
+                displayPackets();
+            }
+        } else {
+            lastCaptureError = null;
         }
-        if (modeEl) modeEl.textContent = `Mode: ${stats.captureMode || 'None'}`;
+        if (modeEl) {
+            const modeText = stats.captureMode === 'none' ? '<span class="text-danger">None (Capture tools missing)</span>' : stats.captureMode;
+            modeEl.innerHTML = `Mode: ${modeText}`;
+        }
     }
 
     if (isCapturing) {
@@ -384,7 +716,7 @@ async function updateCaptureStatus() {
 
 async function fetchCaptureStats() {
   try {
-    const response = await fetch('/api/sniffer/stats', { headers: getAuthHeaders() });
+    const response = await fetch('/api/network/sniffer/stats', { headers: getAuthHeaders() });
     if (!response.ok) return null;
     const result = await response.json();
     return result.success ? result.data : null;
@@ -422,3 +754,4 @@ window.exportPackets = exportPackets;
 window.filterPackets = filterPackets;
 window.displayPacketDetails = displayPacketDetails;
 window.clearLog = clearLog;
+window.scanConnectedDevices = scanConnectedDevices;

@@ -22,20 +22,61 @@ class NetworkMonitor {
   async getNetworkInterfaces() {
     try {
       const interfaces = await si.networkInterfaces();
-      return interfaces.map(iface => ({
-        name: iface.ifaceName || iface.iface,
-        type: iface.type,
-        ip4: iface.ip4,
-        ip4subnet: iface.ip4subnet,
-        ip6: iface.ip6,
-        mac: iface.mac,
-        speed: iface.speed,
-        duplex: iface.duplex,
-        operstate: iface.operstate,
-        mtu: iface.mtu
-      }));
+      return interfaces.map(iface => {
+        let type = iface.type || 'wired';
+        const name = (iface.iface || iface.ifaceName || '').toLowerCase();
+        
+        // Enhance type detection for macOS and generic linux
+        if (name.startsWith('wl') || name.startsWith('wlan') || name.startsWith('en1') || name.startsWith('en2')) {
+            type = 'wireless';
+        } else if (name.startsWith('eth') || name.startsWith('en0')) {
+            type = 'wired';
+        }
+
+        return {
+          name: iface.ifaceName || iface.iface,
+          type: type,
+          ip4: iface.ip4,
+          ip4subnet: iface.ip4subnet,
+          ip6: iface.ip6,
+          mac: iface.mac,
+          speed: iface.speed,
+          duplex: iface.duplex,
+          operstate: iface.operstate,
+          mtu: iface.mtu
+        };
+      });
     } catch (error) {
       console.error('[Network Monitor] Error getting interfaces:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get interfaces with real-time stats
+   */
+  async getInterfacesWithStats() {
+    try {
+      console.log('[Network Monitor] Getting interfaces with stats...');
+      const interfaces = await this.getNetworkInterfaces();
+      const stats = await this.getNetworkStats();
+      console.log(`[Network Monitor] Found ${interfaces.length} interfaces and ${stats.length} stats entries`);
+      
+      const result = interfaces.map(iface => {
+        // Try to find matching stats using multiple name variants
+        const stat = stats.find(s => s.iface === iface.name || s.name === iface.name);
+        return {
+          ...iface,
+          rxRate: stat ? (stat.rxRate || 0) : 0,
+          txRate: stat ? (stat.txRate || 0) : 0,
+          rxBytes: stat ? (stat.rx_bytes || stat.rxBytes || 0) : 0,
+          txBytes: stat ? (stat.tx_bytes || stat.txBytes || 0) : 0
+        };
+      });
+      console.log(`[Network Monitor] Successfully mapped stats for ${result.filter(r => r.rxBytes > 0 || r.rxRate > 0).length} active interfaces`);
+      return result;
+    } catch (error) {
+      console.error('[Network Monitor] Error getting interfaces with stats:', error);
       return [];
     }
   }
@@ -63,6 +104,8 @@ class NetworkMonitor {
         }
 
         return {
+          iface: stat.iface, // Consistent internal name
+          name: stat.iface,
           interface: stat.iface,
           rxBytes: stat.rx_bytes,
           txBytes: stat.tx_bytes,

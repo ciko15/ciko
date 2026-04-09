@@ -6,6 +6,7 @@
 
 // Global state
 let authToken = localStorage.getItem('authToken');
+const API_URL = '/api';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
