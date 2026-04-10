@@ -1,7 +1,7 @@
 // Network Tools - Real Network Analytics + Connected Devices Scanner
 // Uses backend API to capture packets + scan ARP table / ping sweep for connected IPs
 
-let capturedPacketsSize = 1000;
+let capturedPacketsSize = 2500;
 window.capturedPackets = [];
 window.filteredPackets = [];
 window.isCapturing = false;
@@ -11,6 +11,9 @@ window.captureModeInterval = null;
 window.interfacePollingInterval = null;
 window.availableInterfaces = [];
 window.lastCaptureError = null;
+window.connectedDevices = [];
+window.isScanningDevices = false;
+window.yourLocalIP = null;
 
 // Initialize Network Tools
 function initNetworkTools() {
@@ -18,11 +21,13 @@ function initNetworkTools() {
     console.log('[Network Tools] Initializing...');
     
     // Reset state
-    isCapturing = false;
-    capturedPackets = [];
-    filteredPackets = [];
-    packetCounter = 0;
-    lastCaptureError = null;
+    window.isCapturing = false;
+    window.capturedPackets = [];
+    window.filteredPackets = [];
+    window.packetCounter = 0;
+    window.lastCaptureError = null;
+    window.connectedDevices = [];
+    window.isScanningDevices = false;
     
     // Update UI
     updateCaptureStatus();
@@ -31,6 +36,7 @@ function initNetworkTools() {
     // Load network interfaces and start polling
     loadNetworkInterfaces();
     startInterfacePolling();
+    loadLocalInfo();
     
     // Initialize device scanner section
     const deviceScanSection = document.getElementById('deviceScanSection');
@@ -359,6 +365,26 @@ function displayPacketDetails(packetNumber) {
 
     if (!packet) {
         console.warn(`[Network Tools] Packet #${targetNumber} not found in buffer (current buffer size: ${window.capturedPackets.length})`);
+        
+        const detailsContent = document.getElementById('packetDetailsContent');
+        if (detailsContent) {
+            detailsContent.innerHTML = `<div class="empty-state">
+              <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #f39c12; margin-bottom: 10px; display: block;"></i>
+              Packet #${targetNumber} sudah terhapus dari memori server karena trafik data sangat padat.<br><br>
+              <strong>Solusi:</strong> Tekan tombol <span class="badge" style="background:#e74c3c;">Stop Capture</span> di atas terlebih dahulu, baru kemudian klik detail paket yang Anda inginkan.
+            </div>`;
+        }
+        
+        const hexContent = document.getElementById('hexViewerContent');
+        if (hexContent) {
+            hexContent.innerHTML = `<div class="empty-state">Select a packet to view hex data</div>`;
+        }
+        
+        const analysisContent = document.getElementById('packetAnalysisContent');
+        if (analysisContent) {
+            analysisContent.innerHTML = `<div class="empty-state">Select a packet to perform content analysis</div>`;
+        }
+        
         return;
     }
     
@@ -437,79 +463,38 @@ function displayHexViewer(packet) {
 // New packet content analysis logic
 function analyzePacketContent(packet) {
     try {
-        const analysisContent = document.getElementById('packetAnalysisContent');
-        if (!analysisContent) return;
-
-        const info = (packet.info || '').toLowerCase();
-        const raw = (packet.rawData || '').toLowerCase();
-        const protocol = (packet.protocol || '').toUpperCase();
-
-        let prediction = 'Unknown Application Data';
-        let detail = 'Encrypted or proprietary binary data stream.';
-        let icon = 'fa-question-circle';
-        let color = 'gray';
-
-        // Identification logic
-        if (protocol === 'ARP') {
-            prediction = 'Address Resolution Protocol';
-            detail = 'Mapping network addresses to hardware addresses (Local network discovery).';
-            icon = 'fa-search-location';
-            color = '#3498db';
-        } else if (info.includes('quic') || info.includes('dcid')) {
-            prediction = 'Google/QUIC Encrypted Traffic';
-            detail = 'Modern high-speed encrypted data (Web browsing, YouTube, Google Services).';
-            icon = 'fa-shield-alt';
-            color = '#2ecc71';
-        } else if (raw.startsWith('47') && raw.length > 10) {
-            prediction = 'MPEG-TS Video stream';
-            detail = 'Video or audio broadcast data detected via sync byte 0x47.';
-            icon = 'fa-video';
-            color = '#e67e22';
-        } else if (protocol === 'DNS' || info.includes('53')) {
-            prediction = 'DNS Query/Response';
-            detail = 'Resolving domain names to IP addresses.';
-            icon = 'fa-globe';
-            color = '#9b59b6';
-        } else if (protocol === 'HTTP' || info.includes('80')) {
-            prediction = 'Hypertext Transfer Protocol';
-            detail = 'Unencrypted web traffic or API communication.';
-            icon = 'fa-globe-americas';
-            color = '#f1c40f';
-        } else if (info.includes('tls') || info.includes('443') || raw.startsWith('1603')) {
-            prediction = 'Secure Handshake / TLS';
-            detail = 'Encrypted secure communication (HTTPS, SSL).';
-            icon = 'fa-lock';
-            color = '#27ae60';
-        } else if (protocol === 'SNMP') {
-            prediction = 'SNMP Management Traffic';
-            detail = 'Managing or monitoring network-attached devices.';
-            icon = 'fa-desktop';
-            color = '#e74c3c';
-        } else if (protocol === 'ICMP') {
-            prediction = 'Network Control Message (Ping)';
-            detail = 'Testing connectivity or reporting network errors.';
-            icon = 'fa-heartbeat';
-            color = '#f39c12';
-        } else if (info.includes('mdns') || info.includes('5353')) {
-            prediction = 'Multicast DNS (Local Discovery)';
-            detail = 'Devices identifying themselves on the local network (Apple Bonjour, Chromecast).';
-            icon = 'fa-project-diagram';
-            color = '#d35400';
+        const dest = packet.destination || '';
+        if (!dest) return;
+        
+        let ip = dest;
+        let port = '';
+        
+        // Handle format like "192.168.1.1.80" where last element is port
+        const parts = dest.split('.');
+        if (parts.length > 4) {
+            port = parts.pop();
+            ip = parts.join('.');
+        } else if (parts.length === 4) {
+            const proto = (packet.protocol || '').toUpperCase();
+            if (proto === 'HTTP') port = '80';
+            else if (proto === 'HTTPS') port = '443';
+            else if (proto === 'SNMP') port = '161';
+            else if (proto === 'DNS') port = '53';
         }
 
-        analysisContent.innerHTML = `
-            <div class="analysis-box" style="border-left: 5px solid ${color}; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 8px;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <i class="fas ${icon}" style="font-size: 2em; color: ${color};"></i>
-                    <div>
-                        <h4 style="margin: 0; color: ${color};">${prediction}</h4>
-                        <p style="margin: 5px 0 0; font-size: 0.9em; opacity: 0.8;">${detail}</p>
-                    </div>
-                </div>
-            </div>
-        `;
+        const deviceIpInput = document.getElementById('tcpDeviceIp');
+        const portInput = document.getElementById('tcpPort');
+        
+        if (deviceIpInput) deviceIpInput.value = ip;
+        if (portInput && port) portInput.value = port;
+        
+        // Auto trigger connection test if both are filled
+        if (ip && port && document.getElementById('btnTestTcpConnection')) {
+            document.getElementById('tcpDeviceIp').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            testTcpConnection();
+        }
     } catch (error) {
-        console.error('[Network Tools] Analysis error:', error);
+        console.error('[Network Tools] Error auto-analyzing packet:', error);
     }
 }
 
@@ -520,8 +505,8 @@ let isScanningDevices = false;
 
 async function scanConnectedDevices() {
   try {
-    if (isScanningDevices) return;
-    isScanningDevices = true;
+    if (window.isScanningDevices) return;
+    window.isScanningDevices = true;
 
     const scanBtn = document.getElementById('scanDevicesBtn');
     const arpSection = document.getElementById('arpDevicesSection');
@@ -542,27 +527,27 @@ async function scanConnectedDevices() {
     const discoverResult = await discoverResponse.json();
 
     if (arpResult.success) {
-      connectedDevices = arpResult.data || [];
+      window.connectedDevices = arpResult.data || [];
     }
     
     if (discoverResult.success) {
       // Merge ARP + discovered (active) devices
       const activeDevices = discoverResult.data.devices || [];
-      connectedDevices = connectedDevices.concat(activeDevices.filter(d => 
-        !connectedDevices.some(c => c.ip === d.ip)
+      window.connectedDevices = window.connectedDevices.concat(activeDevices.filter(d => 
+        !window.connectedDevices.some(c => c.ip === d.ip)
       ));
     }
 
     displayConnectedDevicesTable();
     updateDeviceCount();
 
-    addLogEntry('Scanner', `Found ${connectedDevices.length} connected devices`, 'success');
+    addLogEntry('Scanner', `Found ${window.connectedDevices.length} connected devices`, 'success');
 
   } catch (error) {
     console.error('[Network Tools] Device scan error:', error);
     addLogEntry('Error', `Scan failed: ${error.message}`, 'error');
   } finally {
-    isScanningDevices = false;
+    window.isScanningDevices = false;
     const scanBtn = document.getElementById('scanDevicesBtn');
     if (scanBtn) {
       scanBtn.disabled = false;
@@ -575,7 +560,7 @@ function displayConnectedDevicesTable() {
   const arpContent = document.getElementById('arpDevicesContent');
   if (!arpContent) return;
 
-  if (connectedDevices.length === 0) {
+  if (window.connectedDevices.length === 0) {
     arpContent.innerHTML = '<div class="empty-state">No connected devices found. Click "Scan Network" to discover all connected IPs/MACs</div>';
     return;
   }
@@ -584,7 +569,7 @@ function displayConnectedDevicesTable() {
     '<th>IP Address</th><th>MAC Address</th><th>Hostname</th><th>Status</th>' +
     '</tr></thead><tbody>';
 
-  connectedDevices.forEach(device => {
+  window.connectedDevices.forEach(device => {
     const isYou = device.ip === (window.yourLocalIP || ''); // Set from local-info if available
     const rowClass = isYou ? 'your-device' : '';
     
@@ -605,28 +590,29 @@ function displayConnectedDevicesTable() {
 function updateDeviceCount() {
   const countEl = document.getElementById('connectedDevicesCount');
   if (countEl) {
-    countEl.textContent = connectedDevices.length;
+    countEl.textContent = window.connectedDevices.length;
   }
 }
 
-// === ORIGINAL EXPORT AND ACTIONS ===
-    // Load local network info (for "your device" highlighting)
-    async function loadLocalInfo() {
-      try {
-        const response = await fetch('/api/network/local-info', { headers: getAuthHeaders() });
-        const result = await response.json();
-        if (result.success && result.data) {
-          window.yourLocalIP = result.data.yourIP;
-        }
-      } catch (error) {
-        console.warn('[Network Tools] Local info unavailable');
-      }
+// Load local network info (for "your device" highlighting)
+async function loadLocalInfo() {
+  try {
+    console.log('[Network Tools] Fetching local info...');
+    const response = await fetch('/api/network/local-info', { headers: getAuthHeaders() });
+    const result = await response.json();
+    if (result.success && result.data) {
+      window.yourLocalIP = result.data.yourIP;
+      console.log('[Network Tools] Local IP identified:', window.yourLocalIP);
+    } else {
+      console.warn('[Network Tools] Local info API returned success:false or no data');
     }
-    
-    // Initialize device scanner (only if logged in)
-    if (localStorage.getItem('authToken')) {
-      loadLocalInfo();
-    }
+  } catch (error) {
+    console.warn('[Network Tools] Local info unavailable:', error.message);
+  }
+}
+
+window.loadLocalInfo = loadLocalInfo;
+window.scanConnectedDevices = scanConnectedDevices;
     
     // Export and Actions
 async function clearCapture() {
@@ -743,6 +729,144 @@ function addLogEntry(source, message, type = 'info') {
 function clearLog() {
     const logEl = document.getElementById('networkToolsLog');
     if (logEl) logEl.innerHTML = '<div class="log-entry info">[System] Log cleared</div>';
+}
+
+// === TCP/IP ANALYZER (NEW) ===
+async function testTcpConnection() {
+  const btn = document.getElementById('btnTestTcpConnection');
+  const resultsPanel = document.getElementById('tcpResultsPanel');
+  
+  const gatewayIp = document.getElementById('tcpGatewayIp')?.value;
+  const deviceIp = document.getElementById('tcpDeviceIp')?.value;
+  const port = document.getElementById('tcpPort')?.value;
+  const syncMarker = document.getElementById('tcpSyncMarker')?.value;
+
+  if (!deviceIp || !port) {
+    alert('Device IP and Port are required!');
+    return;
+  }
+
+  if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing Connection...';
+  }
+  if (resultsPanel) resultsPanel.style.display = 'block';
+  
+  document.getElementById('tcpGateStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+  document.getElementById('tcpConnStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+  document.getElementById('tcpMarkerStatus').innerHTML = '-';
+  document.getElementById('tcpRawHex').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Waiting for data (Timeout max ~5s)...';
+
+  addLogEntry('TCP Analyzer', `Testing connection to ${deviceIp}:${port}...`, 'info');
+
+  try {
+    const response = await fetch('/api/network/tcp-test', {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gatewayIp, deviceIp, port, syncMarker })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      const data = result.data;
+      
+      // Update UI
+      const gateStatusEl = document.getElementById('tcpGateStatus');
+      if (gatewayIp) {
+         if (data.gatewayPing) {
+           gateStatusEl.innerHTML = '<span class="status-up">✅ Reachable</span>';
+         } else {
+           gateStatusEl.innerHTML = '<span class="status-down">❌ Unreachable</span>';
+         }
+      } else {
+         gateStatusEl.innerHTML = '<i>Skipped</i>';
+      }
+
+      const connStatusEl = document.getElementById('tcpConnStatus');
+      if (data.connected) {
+         connStatusEl.innerHTML = '<span class="status-up">✅ Connected</span>';
+      } else {
+         connStatusEl.innerHTML = `<span class="status-down">❌ ${data.status}</span>`;
+      }
+
+      const markerStatusEl = document.getElementById('tcpMarkerStatus');
+      if (data.syncMarkerValid === true) {
+         markerStatusEl.innerHTML = '<span class="status-up" style="color: #2ecc71; font-weight: bold;">✅ Valid</span>';
+      } else if (data.syncMarkerValid === false) {
+         markerStatusEl.innerHTML = '<span class="status-down" style="color: #e74c3c; font-weight: bold;">❌ Invalid</span>';
+      } else {
+         markerStatusEl.innerHTML = '<i>Not Validated</i>';
+      }
+
+      document.getElementById('tcpRawHex').innerHTML = data.rawHex || '<i style="color: #888;">No string/hex payload received or connection failed.</i>';
+      
+      addLogEntry('TCP Analyzer', data.message || 'Test complete', data.connected ? 'success' : 'error');
+    } else {
+      throw new Error(result.error || result.message || 'Failed to analyze TCP connection');
+    }
+  } catch (err) {
+    document.getElementById('tcpConnStatus').innerHTML = `<span class="status-down">❌ Error</span>`;
+    document.getElementById('tcpGateStatus').innerHTML = '-';
+    document.getElementById('tcpMarkerStatus').innerHTML = '-';
+    document.getElementById('tcpRawHex').innerHTML = err.message;
+    addLogEntry('TCP Analyzer Error', err.message, 'error');
+  } finally {
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-bolt"></i> Test Connection & Analyze';
+    }
+  }
+}
+
+async function scanTcpPorts() {
+  const deviceIp = document.getElementById('tcpDeviceIp')?.value;
+  const startPort = document.getElementById('tcpPortStart')?.value;
+  const endPort = document.getElementById('tcpPortEnd')?.value;
+
+  if (!deviceIp || !startPort || !endPort) {
+    alert('Device IP, Start Port, and End Port are required for scanning!');
+    return;
+  }
+
+  const resultPanel = document.getElementById('tcpPortScanResult');
+  const resultVal = document.getElementById('tcpOpenPortsVal');
+  
+  if (resultPanel) resultPanel.style.display = 'block';
+  if (resultVal) resultVal.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+  
+  // Show main panel if not visible
+  const resultsPanel = document.getElementById('tcpResultsPanel');
+  if (resultsPanel) resultsPanel.style.display = 'block';
+
+  addLogEntry('Port Scanner', `Scanning ${deviceIp} ports ${startPort}-${endPort}...`, 'info');
+
+  try {
+    const response = await fetch('/api/network/tcp-scan', {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceIp, startPort, endPort })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      const openPorts = result.data.openPorts || [];
+      if (openPorts.length > 0) {
+        if (resultVal) resultVal.innerHTML = `<span style="color: #2ecc71; font-weight: bold;">${openPorts.join(', ')}</span>`;
+        // Auto select the first open port
+        document.getElementById('tcpPort').value = openPorts[0];
+        addLogEntry('Port Scanner', `Found open ports: ${openPorts.join(', ')}`, 'success');
+      } else {
+        if (resultVal) resultVal.innerHTML = '<span style="color: #e74c3c;">No open ports found</span>';
+        addLogEntry('Port Scanner', 'No open ports found', 'warning');
+      }
+    } else {
+      throw new Error(result.error || result.message || 'Failed to scan ports');
+    }
+  } catch (err) {
+    if (resultVal) resultVal.innerHTML = `<span style="color: #e74c3c;">Error: ${err.message}</span>`;
+  }
 }
 
 // Global Exports

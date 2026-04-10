@@ -2,7 +2,7 @@
 const API_URL = '/api';
 
 // State
-let authToken = localStorage.getItem('authToken') || null;
+let authToken = localStorage.getItem('authToken') || new URLSearchParams(window.location.search).get('token') || null;
 let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 let equipmentData = [];
 let airportsData = [];
@@ -27,7 +27,16 @@ const pluralMap = {
 // Helper to get auth headers
 function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json' };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  
+  // Refresh token from URL if needed (in case of dynamic navigation)
+  if (!authToken) {
+      const urlToken = new URLSearchParams(window.location.search).get('token');
+      if (urlToken) authToken = urlToken;
+  }
+  
+  if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+  }
   return headers;
 }
 window.getAuthHeaders = getAuthHeaders;
@@ -1277,6 +1286,12 @@ function initNavigation() {
       if (sectionId === 'dashboard' && window.map) setTimeout(() => window.map.invalidateSize(), 200);
       if (sectionId === 'configure' && typeof window.initConfigurationNav === 'function') {
         window.initConfigurationNav();
+      }
+      if (sectionId === 'network-tools' && typeof window.initNetworkTools === 'function') {
+        window.initNetworkTools();
+      }
+      if (sectionId === 'network-monitor' && typeof window.initNetworkMonitor === 'function') {
+        window.initNetworkMonitor();
       }
     }
 

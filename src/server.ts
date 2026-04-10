@@ -47,7 +47,7 @@ const equipmentService = new EquipmentService(db);
 const DataCollectorScheduler = require('./scheduler/collector');
 const connectionManager = require('./connection/manager');
 const thresholdEvaluator = require('./utils/thresholdEvaluator');
-const connectionTester = require('./scheduler/test_connection');
+
 // const websocketServer = require('./websocket/server'); // We'll handle WS separately in Elysia
 const templateService = require('./services/template');
 
@@ -878,8 +878,21 @@ const app = new Elysia()
             return { success: true };
         })
         .get('/local-info', async () => ({ success: true, data: await require('./network/monitor').getLocalNetworkInfo() }))
+        .get('/system-info', async () => ({ success: true, data: await require('./network/monitor').getSystemNetworkInfo() }))
         .get('/arp-table', async () => ({ success: true, data: await require('./network/monitor').getArpTable() }))
         .get('/discover-devices', async () => ({ success: true, data: await require('./network/monitor').discoverNetworkDevices() }))
+        .post('/tcp-test', async ({ body }) => {
+            const { testTcpConnection } = require('./network/tcp-tester');
+            const { gatewayIp, deviceIp, port, syncMarker } = body as any;
+            const result = await testTcpConnection(gatewayIp, deviceIp, parseInt(port), syncMarker);
+            return { success: true, data: result };
+        })
+        .post('/tcp-scan', async ({ body }) => {
+            const { scanPorts } = require('./network/tcp-tester');
+            const { deviceIp, startPort, endPort } = body as any;
+            const openPorts = await scanPorts(deviceIp, parseInt(startPort), parseInt(endPort));
+            return { success: true, data: { openPorts } };
+        })
     )
 
     // --- PACKET EXPORT ROUTE ---
