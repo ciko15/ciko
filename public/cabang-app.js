@@ -183,38 +183,57 @@ const cabangModule = (function() {
       
       // Action Data
       let dataHtml = '';
-      const hasIp = item.ipAddress && item.ipAddress.trim() !== '';
       
-      if (!hasIp) {
-        dataHtml = `
-          <div class="empty-data unconfigured">
-            <i class="fas fa-network-wired"></i>
-            <span>No IP Configured</span>
-          </div>`;
-      } else if (item.lastData) {
-        const dataKeys = Object.keys(item.lastData).filter(k => k !== 'error' && k !== 'cached').slice(0, 6);
-        if (dataKeys.length > 0) {
-          dataHtml = `<div class="card-data-grid">
-            ${dataKeys.map(key => {
-              const valObj = item.lastData[key];
-              const isObj = valObj !== null && typeof valObj === 'object';
-              const label = isObj && valObj.label ? valObj.label : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-              const val = isObj ? valObj.value : valObj;
-              const unit = isObj && valObj.unit ? valObj.unit : '';
-              return `<div class="data-point">
-                <span class="data-label">${label}</span>
-                <span class="data-value">${val}${unit}</span>
-              </div>`;
+      if (item.lastData) {
+        // Optimized for grouped data: item.lastData = { "TX 1": { param1: val1, ... }, "TX 2": { ... } }
+        const sources = Object.keys(item.lastData);
+        
+        if (sources.length > 0) {
+          dataHtml = `<div class="card-sources-container">
+            ${sources.map(sourceName => {
+              const sourceData = item.lastData[sourceName];
+              const dataKeys = Object.keys(sourceData).filter(k => !k.startsWith('_') && k !== 'error' && k !== 'cached').slice(0, 4);
+              
+              if (dataKeys.length === 0) return '';
+              
+              return `
+                <div class="source-group">
+                  <div class="source-header"><i class="fas fa-microchip"></i> ${sourceName}</div>
+                  <div class="card-data-grid">
+                    ${dataKeys.map(key => {
+                      const valObj = sourceData[key];
+                      const isObj = valObj !== null && typeof valObj === 'object';
+                      const label = isObj && valObj.label ? valObj.label : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      const val = isObj ? valObj.value : valObj;
+                      const unit = isObj && valObj.unit ? valObj.unit : '';
+                      return `<div class="data-point">
+                        <span class="data-label">${label}</span>
+                        <span class="data-value">${val}${unit}</span>
+                      </div>`;
+                    }).join('')}
+                  </div>
+                </div>
+              `;
             }).join('')}
           </div>`;
         } else {
-          dataHtml = '<div class="empty-data">No realtime data available</div>';
+          dataHtml = `
+            <div class="empty-data waiting">
+              <i class="fas fa-satellite-dish fa-spin"></i>
+              <span>Waiting for data collection...</span>
+            </div>`;
         }
       } else {
-        dataHtml = '<div class="empty-data">Waiting for data collection...</div>';
+        dataHtml = `
+          <div class="empty-data waiting">
+            <i class="fas fa-satellite-dish fa-spin"></i>
+            <span>Waiting for data collection...</span>
+          </div>`;
       }
       
       const lastUpdate = item.lastUpdate ? new Date(item.lastUpdate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Never';
+      const location = item.airportName || item.branchName || 'Unknown Location';
+      const showLocation = location !== 'Unknown Location';
       
       return `
         <div class="cabang-card ${statusClass}" data-id="${item.id}">
@@ -226,10 +245,11 @@ const cabangModule = (function() {
             <div class="status-badge ${statusClass}">${status}</div>
           </div>
           
+          ${showLocation ? `
           <div class="card-location">
             <i class="fas fa-map-marker-alt"></i>
-            <span>${item.airportName || item.branchName || 'Unknown Location'}</span>
-          </div>
+            <span>${location}</span>
+          </div>` : ''}
           
           ${dataHtml}
           

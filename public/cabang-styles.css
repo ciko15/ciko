@@ -1588,6 +1588,7 @@
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  height: 480px; /* Fixed height for uniformity */
 }
 
 .cabang-card:hover {
@@ -1764,4 +1765,96 @@
 .cabang-card h3 {
   color: #fff;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+/* ============================================
+   SOURCE GROUPS & DATA DISPLAY
+   ============================================ */
+
+.card-sources-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  flex: 1; /* Take up available space */
+  overflow-y: auto; /* Enable scrolling for long content */
+  padding-right: 5px; /* Space for scrollbar */
+}
+
+/* Custom Scrollbar for Card Sources */
+.card-sources-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.card-sources-container::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.2);
+  border-radius: 10px;
+}
+
+.card-sources-container::-webkit-scrollbar-thumb {
+  background: var(--monitoring-accent);
+  border-radius: 10px;
+  opacity: 0.5;
+}
+
+.card-sources-container::-webkit-scrollbar-thumb:hover {
+  background: var(--monitoring-accent-hover);
+}
+
+.source-group {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: var(--monitoring-radius-sm);
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.source-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--monitoring-accent);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.5px;
+}
+
+.source-header i {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.card-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.data-point {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.data-label {
+  font-size: 0.65rem;
+  color: var(--monitoring-text-muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.data-value {
+  font-size: 0.85rem;
+  color: var(--monitoring-text);
+  font-weight: 600;
+}
+
+[data-theme="light"] .source-group {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .data-point {
+  background: rgba(0, 0, 0, 0.03);
 }

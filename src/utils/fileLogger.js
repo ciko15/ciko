@@ -23,10 +23,19 @@ class FileLogger {
      */
     getLogFilePath(equipmentName, equipmentId) {
         const now = new Date();
-        const yearMonth = now.toISOString().slice(0, 7).replace(/-/g, '-'); // YYYY-MM
-        const day = now.toISOString().slice(8, 10); // DD
+        
+        // Use Local Time for consistent identification by users
+        const yearFull = now.getFullYear();
+        const monthNum = now.getMonth() + 1;
+        const dayNum = now.getDate();
+        
+        const yearMonth = `${yearFull}-${monthNum.toString().padStart(2, '0')}`; // YYYY-MM
+        const day = dayNum.toString().padStart(2, '0'); // DD
+        const month = monthNum.toString().padStart(2, '0'); // MM
+        const yearShort = yearFull.toString().slice(-2); // YY
         const hour = now.getHours().toString().padStart(2, '0'); // HH
-        const dateStamp = `${day}${now.getDate().toString().padStart(2, '0')}${String(now.getMonth()+1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`; // DDMMYY
+        
+        const dateStamp = `${day}${month}${yearShort}`; // DDMMYY
         
         // Sanitize equipment name
         const safeName = equipmentName
