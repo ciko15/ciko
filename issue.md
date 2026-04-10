@@ -1,78 +1,104 @@
-# Issue Tracker: Network Tools API & UI Fixes
+# Implementasi & Verifikasi Skema Parsing Data Equipment (UDP/TCP)
 
-Dokumen ini ditujukan untuk programmer pemula atau AI assistant agar dapat dengan mudah memperbaiki masalah yang dilaporkan pengguna pada menu Network Tools dan Network Monitoring. Terdapat 3 bagian utama yang perlu diperbaiki: UI State, Data Parsing (IP/Port), dan Layout/DOM Restructuring.
+## 📌 Latar Belakang
+Aplikasi ini bertugas untuk memonitor data dari berbagai peralatan navigasi/komunikasi (equipment). Setiap equipment akan mengirimkan data mentah (raw data) melalui koneksi UDP atau TCP ke alamat IP dan Port tertentu di server aplikasi. 
 
----
+Aplikasi memiliki modul parsir di dalam folder `/src/parsers/` (contoh: `dme_maru_310_320.js`) yang bertugas menerjemahkan raw data ini menjadi struktur data JSON yang bisa dibaca dan disimpan.
 
-## 1. Masalah pada UI "Empty State" (Poin 1, 2, 3)
+## 🎯 Tujuan Issue
+Memastikan **alur (pipeline) data dari penerimaan UDP/TCP hingga ke proses parsing berjalan dengan baik dan modular**. 
 
-**Gejala yang terjadi:** 
-Ketika pengguna sudah memilih packet dari tabel `packet list`, teks empty state berikut tetap muncul (tidak tertimpa oleh data):
-- "Select a packet to view details" (pada Packet Detail)
-- "Select a packet to perform content analysis" (pada Packet Content Analysis)
-- "Select a packet to view hex data" (pada Hex Viewer)
-
-**Lokasi File yang Terlibat:**
-- `public/network-tools.js` (Fungsi `displayPacketDetails`, `displayHexViewer`, `analyzePacketContent`)
-- `public/index.html` (Div id: `packetDetailsContent`, `packetAnalysisContent`, `hexViewerContent`)
-
-**Langkah Perbaikan:**
-1. Di dalam `public/network-tools.js` fungsi `displayPacketDetails(packetNumber)`, data paket diambil dari array `window.capturedPackets`. Jika tabel sering *update* dan data awal sudah terhapus (misal karena buffer limit), pencarian `packet` akan gagal dan fungsi melakukan return dini.
-2. Anda bisa memberikan notifikasi atau membersihkan tampilan jika packet tidak ditemukan.
-3. Periksa juga apakah terjadi `try-catch block / error` di `displayHexViewer(packet)` atau `analyzePacketContent(packet)` yang mencegah kode melanjutkan untuk me-replace innerHTML. Sisipkan perintah `console.log("Packet data:", packet)` untuk di-debug.
-4. **Perbaikan termudah:** Pastikan elemen detail selalu diganti isinya ketika tabel diklik. Cek ID pada HTML:
-   - `<div id="packetDetailsContent">...</div>`
-   - `<div id="packetAnalysisContent">...</div>`
-   - `<div id="hexViewerContent">...</div>`
-   Jika ada kegagalan manipulasi DOM, update *innerHTML* nya untuk menampilkan UI yang ramah pengguna.
+Skema yang diharapkan:
+1. **Otentikasi & Koneksi**: Aplikasi membuka koneksi mendengarkan (listen) pada IP dan UDP Port yang sesuai dengan konfigurasi alat.
+2. **Routing Parsers**: Aplikasi mengetahui file parser mana yang harus digunakan berdasarkan tipe koneksi alat (misal: `connection_type = 'dme_maru_310_320'`) tanpa perlu melakukan *hard-code* secara berlebihan.
+3. **Penyatuan Data Flow**: Saat data masuk melalui Port tersebut, data langsung dilempar ke file parser yang tepat (seperti `dme_maru_310_320.js`), diproses, dan hasilnya siap disimpan ke database.
+4. **Modularitas (Future-proofing)**: Jika di masa depan ada alat baru, kita hanya perlu menambahkan file parser baru di `/src/parsers/` dan mendaftarkannya di `factory.js` tanpa harus mengubah logika inti penerimaan data jaringan.
 
 ---
 
-## 2. Format IP Address dan Port yang Bergabung (Poin 4)
-
-**Gejala yang terjadi:** 
-Terdapat data IP address yang tampil sebagai `172.20.63.52.44517`. Pengguna menganggap format IP ini salah karena digit terakhir (44517) melebihi batas 254. Angka kelima tersebut sebenarnya adalah *Port Number* yang secara standar digabungkan oleh utilitas *tcpdump* menggunakan tanda titik (`.`).
-
-**Lokasi File yang Terlibat:**
-- `src/network/sniffer.js` (Backend) - Fungsi `parseTcpdumpLine(line, interfaceName)`
-
-**Langkah Perbaikan:**
-1. Buka `src/network/sniffer.js` dan cari fungsi bernama `parseTcpdumpLine()`.
-2. Pada bagian baris yang mengekstrak regex dari output eksekusi command tcpdump (sekitar `const match = line.match(...)`), modifikasi `packet.source` dan `packet.destination`.
-3. Buat fungsi bantuan untuk membersihkan format IP. Ekstrak *port* dari digit terakhir setelah titik yang keempat.
-   **Contoh Solusi Kode:**
-   ```javascript
-   function formatIpPort(address) {
-       // Misal: '172.20.63.52.44517'
-       const parts = address.split('.');
-       if (parts.length > 4) {
-           const port = parts.pop(); // keluarkan 44517
-           const ip = parts.join('.'); // gabungkan sisa ke 172.20.63.52
-           // Gunakan format IP:Port
-           return `${ip}:${port}`;
-       }
-       return address;
-   }
-   ```
-4. Ubah pengaturan nilai pada `packet.source = formatIpPort(match[3])` dan `packet.destination = formatIpPort(match[4])`.
+## 🔍 Kondisi Saat Ini (Hasil Analisis)
+Berdasarkan pengecekan kode:
+- **Tersedia:** `src/parsers/factory.js` sudah siap untuk menginisiasi parser berdasarkan `connection_type`.
+- **Tersedia:** `src/parsers/dme_maru_310_320.js` dan parser lainnya sudah berdiri sendiri meng-*extend* `BaseParser` dan memiliki fungsi `parse(rawData)`.
+- **Tersedia:** `src/connection/manager.js` memiliki fungsi `connectUDP` dan `connectTCP` untuk mendengarkan port jaringan.
+- 🔴 **Masalah (Missing Link):** Fungsi `connectUDP` pada `ConnectionManager` **TIDAK PERNAH DIPANGGIL** di kode manapun di flow utama. Artinya, saat ini logika penghubung antara data jaringan yang masuk dengan eksekusi `ParserFactory` masih terputus (belum diimplementasikan dalam service yang berjalan aktif).
 
 ---
 
-## 3. Restrukturisasi Layout Network Monitoring & Network Tools (Poin 5)
+## 🛠️ Langkah-Langkah Implementasi (Untuk Programmer/AI)
 
-**Gejala yang terjadi:** 
-Pengguna ingin layout Network Monitoring dirombak: Seluruh konten di bagian menu "Network Monitoring" harus dihapus sepenuhnya, lalu diganti/diisi menggunakan komponen "Connected Devices" yang saat ini diletakkan pada menu "Network Tools".
+Untuk memperbaiki dan merealisasikan skema ini, ikuti langkah sistematis berikut:
 
-**Lokasi File yang Terlibat:**
-- `public/index.html`
+### 1. Buat Service Penghubung Jaringan & Parsers (Misal di `src/scheduler/collector.js` atau buat `src/services/network_listener.js`)
+Anda perlu membuat fungsi inisialisasi yang melakukan fetch ke database untuk semua alat yang aktif saat server menyala:
+- Ambil data alat meliputi: `id`, `ipAddress` (atau host), `port`, dan `connection_type` (tipe alat/parser).
+- Lakukan iterasi pada setiap alat untuk menginisialisasi listener.
 
-**Langkah Perbaikan (Pindahkan HTML Code):**
-1. Buka file `public/index.html`.
-2. Cari bagian HTML dengan ID `<section class="..." id="network-monitorSection">`.
-3. Di dalam section tersebut (biasanya dalam class `<div class="crud-container">`), **hapus semua div element** (contoh: *Network Stats Overview*, *Interface Traffic Stats*, *Connectivity Test*, dll) sehingga section itu jadi kosong alias bersih.
-4. Kemudian, cari bagian HTML degan ID `<section class="..." id="network-toolsSection">`.
-5. Temukan elemen komponen Scanner ARP bernama: 
-   `<div class="card" style="margin-top: 20px;" id="deviceScanSection">...</div>`
-6. **CUT / Pindahkan** elemen `deviceScanSection` tersebut beserta isinya keluar dari menu `network-toolsSection`.
-7. **PASTE** elemen tersebut ke dalam `network-monitorSection` (menu Network Monitoring) yang sebelumnya telah Anda bersihkan.
-8. Simpan file `index.html`. Fungsi `scanConnectedDevices()` pada JS otomatis akan tetap dapat berjalan dengan normal karena memanggil id yang bersifat terpusat/global!
+### 2. Inisiasi Parser dari Factory
+Untuk setiap alat di dalam iterasi, panggil:
+```javascript
+const ParserFactory = require('../parsers/factory');
+
+// Pastikan connection_type sesuai dengan yang didukung oleh factory
+const parser = ParserFactory.createParser(equipment.connection_type, equipment.parser_config || {});
+
+if (!parser) {
+    console.warn(`Parser tidak ditemukan untuk alat: ${equipment.name}`);
+    // Lanjut ke iterasi alat berikutnya
+}
+```
+
+### 3. Binding Socket Jaringan UDP/TCP
+Gunakan `ConnectionManager` untuk menjembatani alat tersebut dengan server:
+```javascript
+const connectionManager = require('../connection/manager');
+
+// Jika alat menggunakan UDP
+connectionManager.connectUDP(
+    equipment.id, 
+    equipment.ipAddress, // atau equipment.host
+    equipment.port, 
+    (rawData) => {
+        // [LANJUT KE LANGKAH 4] Callback ini dieksekusi saat ada data masuk dari alat
+    },
+    (err) => {
+        console.error(`Error pada alat ${equipment.name}:`, err);
+    }
+);
+```
+
+### 4. Proses Eksekusi Parsing (Data Flow)
+Di dalam fungsi *callback* `(rawData)` di atas, panggil parser yang sudah disiapkan:
+```javascript
+const result = parser.parse(rawData);
+
+if (result.success) {
+    // 1. Simpan result.data ke log database
+    // misal: db.createEquipmentLog({ equipmentId: equipment.id, data: result.data, status: result.status ... })
+    
+    // 2. Update status equipment terkini berdasarkan result.status (Normal/Warning/Alarm)
+} else {
+    console.error(`Gagal melakukan parse untuk ${equipment.name}:`, result.error);
+}
+```
+
+### 5. Registrasi Service di `server.ts`
+Pastikan fungsi/class service yang Anda buat tersebut dipanggil di dalam file utama `src/server.ts` pada saat inisialisasi aplikasi (contoh: dipanggil di dalam fungsi `startServices()`).
+
+### 6. Verifikasi Modularitas
+Pastikan alur di atas bekerja murni berdasarkan variabel `connection_type`.
+Jika kita menambahkan alat baru:
+1. Buat file baru `/src/parsers/alat_baru.js`.
+2. Tambahkan `case 'alat_baru'` di `/src/parsers/factory.js`. 
+3. Simpan data spesifikasi alat di database dengan `connection_type = 'alat_baru'`.
+
+Sistem jaringan tidak perlu diubah, dan aplikasi akan otomatis mendengarkan port yang baru dan menggunakan file parser yang baru.
+
+---
+
+## ✅ Kriteria Sukses (DoD - Definition of Done)
+1. Aplikasi berhasil binding (listen) ke port UDP/TCP sesuai konfigurasi database tanpa adanya error konflik port.
+2. Ketika simulator mengirimkan raw data ke port tersebut, data ditangkap oleh `connectionManager.js`.
+3. File parser spesifik (misal `dme_maru_310_320.js`) otomatis tereksekusi dan memberikan return objek JSON.
+4. Nilai parse JSON berhasil disimpan ke database.
+5. Mendukung penambahan parser/alat baru tanpa perlu melakukan hard-code di sisi *connection listener*.

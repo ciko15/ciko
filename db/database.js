@@ -11,6 +11,16 @@ const AUTH_CONFIG_PATH = path.join(__dirname, 'equipment_otentication_config.jso
 const LIMITATION_CONFIG_PATH = path.join(__dirname, 'limitation_config.json');
 const TEMPLATE_CONFIG_PATH = path.join(__dirname, 'templates_config.json');
 
+// --- PARSER PARAMETER TEMPLATES ---
+// Used to show placeholders (-) when data is missing
+const PARSER_TEMPLATES = {
+  'dvor_maru_220': ['latitude', 'longitude', 'altitude', 'groundSpeed', 'trackAngle'],
+  'custom_1775446808830': ['m1_sys_delay', 'm1_reply_eff', 'm1_fwd_power', 'm1_5v_ps', 'm1_15v_ps', 'm1_48v_ps', 'ident'],
+  'custom_1775512889323': ['latitude', 'longitude', 'altitude', 'groundSpeed', 'trackAngle'],
+  'custom_1775563814757': ['mon1_rf_level', 'mon1_30hz_am', 'mon1_azimuth', 'mon1_9960hz_fm'],
+  'default': ['Status']
+};
+
 // --- GENERIC JSON HELPERS ---
 async function readJson(filePath, defaultValue = []) {
   try {
@@ -122,7 +132,7 @@ async function deleteAirport(id) {
 
 // --- EQUIPMENT ---
 async function getAllEquipment(filters = {}) {
-  let equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
+  const equipmentList = await readJson(EQUIPMENT_CONFIG_PATH);
   let filtered = [...equipmentList];
 
   if (filters.category) {
@@ -142,11 +152,107 @@ async function getAllEquipment(filters = {}) {
   const limit = filters.limit || 1000;
   const offset = (page - 1) * limit;
 
+  const resultData = filtered.slice(offset, offset + limit);
+
+  // Enrich with latest data if requested
+  if (filters.includeData) {
+    const allSources = await readJson(AUTH_CONFIG_PATH);
+    
+    for (const item of resultData) {
+      const latestLogs = getLatestLogsBySource(item.id);
+      
+      // Initialize with ALL configured sources for this equipment
+      const mergedData = {};
+      const configSources = allSources.filter(s => String(s.equipt_id) === String(item.id));
+      
+      for (const src of configSources) {
+        const template = PARSER_TEMPLATES[src.parsing_id] || PARSER_TEMPLATES['default'];
+        const placeholderData = {};
+        template.forEach(key => {
+          placeholderData[key] = '-';
+        });
+
+        mergedData[src.name] = {
+          ...placeholderData,
+          _status: 'Disconnect', // Default until data arrives
+          _logged_at: null
+        };
+      }
+
+      let latestTime = null;
+      if (latestLogs.length > 0) {
+        const now = Date.now();
+        for (const log of latestLogs) {
+          const sourceName = log.source || 'default';
+          const logTime = new Date(log.logged_at).getTime();
+          const isTimedOut = (now - logTime) > (4 * 60 * 1000); // 4 minutes
+          
+          if (isTimedOut) {
+            // Force values to '-' by using the pre-initialized mergedData[sourceName]
+            // which already contains the PARSER_TEMPLATES placeholders
+            mergedData[sourceName]._status = 'Disconnect';
+            mergedData[sourceName]._logged_at = log.logged_at;
+          } else {
+            // Valid fresh data
+            mergedData[sourceName] = {
+              ...mergedData[sourceName],
+              ...(log.data || {}),
+              _status: log.status || 'Normal',
+              _logged_at: log.logged_at
+            };
+          }
+          
+          if (!latestTime || new Date(log.logged_at) > new Date(latestTime)) {
+            latestTime = log.logged_at;
+          }
+        }
+      }
+      
+      item.lastData = mergedData;
+      item.lastUpdate = latestTime;
+
+      // Real-time Status Aggregation (Synchronize Dashboard color with data dashes)
+      const sourceStatuses = Object.values(mergedData).map((src) => src._status);
+      if (sourceStatuses.length > 0) {
+        if (sourceStatuses.every(s => s === 'Disconnect')) {
+          item.status = 'Disconnect';
+        } else if (sourceStatuses.some(s => s === 'Alarm' || s === 'Fail')) {
+          item.status = 'Alarm';
+        } else if (sourceStatuses.some(s => s === 'Warning' || s === 'Disconnect')) {
+          item.status = 'Warning';
+        } else {
+          item.status = 'Normal';
+        }
+      }
+    }
+  }
+
   return {
-    data: filtered.slice(offset, offset + limit),
+    data: resultData,
     total: filtered.length,
     pagination: { page, limit, total: filtered.length, totalPages: Math.ceil(filtered.length / limit) }
   };
+}
+
+/**
+ * Helper to get the latest log for each source of an equipment
+ */
+function getLatestLogsBySource(equipmentId) {
+  const latestBySource = new Map();
+  
+  // Filter logs for this equipment and find latest for each source
+  const equipmentLogs = equipmentLogsDB.filter(l => String(l.equipmentId) === String(equipmentId));
+  
+  for (const log of equipmentLogs) {
+    const source = log.source || 'default';
+    const existing = latestBySource.get(source);
+    
+    if (!existing || new Date(log.logged_at) > new Date(existing.logged_at)) {
+      latestBySource.set(source, log);
+    }
+  }
+  
+  return Array.from(latestBySource.values());
 }
 
 async function getEquipmentStatsSummary() {

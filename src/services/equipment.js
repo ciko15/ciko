@@ -42,6 +42,15 @@ class EquipmentService {
                 }
             }
 
+            // Fetch latest data logs - NEW
+            const logsResult = await this.db.getEquipmentLogs({ equipmentId, limit: 10 });
+            if (logsResult && logsResult.data && logsResult.data.length > 0) {
+                // Find latest log
+                const latest = logsResult.data[0];
+                equipment.lastData = latest.data;
+                equipment.lastUpdate = latest.logged_at;
+            }
+
             // Legacy field mapping for compatibility
             equipment.host = equipment.ip || equipment.snmpIP || equipment.host || (equipment.components && equipment.components.length > 0 ? equipment.components[0].ip_address : null);
             equipment.port = equipment.port || 161;
@@ -212,10 +221,24 @@ class EquipmentService {
         try {
             const equipment = await this.db.getEquipmentById(equipmentId);
             const airport = equipment ? await this.db.getAirportById(equipment.airportId) : null;
+            const equipName = equipment ? equipment.name : 'Unknown';
 
+            // 1. JSON-line file logging (data/YYYY-MM/DD/...)
+            try {
+                const fileLogger = require('../utils/fileLogger');
+                await fileLogger.log(equipName, equipmentId, {
+                    ...parsedData,
+                    status,
+                    _ip: parsedData._ip || (equipment ? equipment.ip || equipment.host : 'unknown')
+                });
+            } catch (err) {
+                console.error('[EquipmentService] File logging error:', err);
+            }
+
+            // 2. Database logging (in-memory/JSON store)
             await this.db.createEquipmentLog({
                 equipmentId,
-                equipment_name: equipment ? equipment.name : 'Unknown',
+                equipment_name: equipName,
                 status,
                 data: parsedData.data || {},
                 source: parsedData.source || 'snmp',

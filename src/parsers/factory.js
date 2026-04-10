@@ -6,6 +6,7 @@
 const RcmsParser = require('./rcms');
 const DvorMaru220Parser = require('./dvor_maru_220');
 const DmeMaru310320Parser = require('./dme_maru_310_320');
+const AsterixParser = require('./asterix_parser');
 
 class ParserFactory {
     /**
@@ -26,9 +27,7 @@ class ParserFactory {
                 return new DmeMaru310320Parser(config);
             
             case 'asterix':
-                // ASTERIX parser - can be implemented later
-                console.warn('[ParserFactory] ASTERIX parser not yet implemented');
-                return null;
+                return new AsterixParser(config);
             
             case 'snmp':
                 // SNMP uses different mechanism - handled by SNMP service

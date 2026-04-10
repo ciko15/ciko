@@ -97,21 +97,18 @@ async function collectEquipmentData() {
                 
                 // Only update status and logs if we actually had sources to monitor
                 if (isProcessed) {
-                    await db.updateEquipmentStatus(item.id, status);
-                    await db.createEquipmentLog({
-                        equipmentId: item.id,
-                        data: { ...parsedData, status, triggeredParameters: triggeredParameters || [] },
-                        source: config?.templateId || 'ping_monitor'
-                    });
-
-                    // File logging
-                    const fileLogger = require('./utils/fileLogger');
-                    await fileLogger.log(item.name || `equip_${item.id}`, item.id, {
-                        ...parsedData,
-                        status,
-                        triggeredParameters: triggeredParameters || [],
-                        _ip: parsedData._ip || (parsedData._sources && parsedData._sources[0]?.ip)
-                    });
+                    // Status is now handled by the watchdog consolidation
+                    // await equipmentService.updateEquipmentStatus(item.id, status);
+                    await equipmentService.saveToLogs(
+                        item.id,
+                        { 
+                            ...parsedData, 
+                            triggeredParameters: triggeredParameters || [],
+                            _ip: parsedData._ip || (parsedData._sources && parsedData._sources[0]?.ip)
+                        },
+                        config?.templateId || 'ping_monitor',
+                        status
+                    );
                 }
             } catch (err: any) {
                 console.error(`[SCHEDULER] Error for ${item.name}:`, err.message);
@@ -140,6 +137,60 @@ async function seedUpsJakarta() {
         }
     } catch (e: any) {
         console.error('[SEED] Failed:', e.message);
+    }
+}
+
+/**
+ * Watchdog to check if any equipment has timed out (no updates for 4 minutes)
+ */
+async function checkEquipmentWatchdog() {
+    try {
+        console.log('[WATCHDOG] Checking for timed-out equipment and partial failures...');
+        const result = await db.getAllEquipment({ includeData: true, isActive: true });
+        const equipmentList = result.data || [];
+        const now = Date.now();
+        const TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes
+
+        for (const item of equipmentList) {
+            let finalStatus = item.status || 'Normal';
+
+            if (item.lastData) {
+                const sourceNames = Object.keys(item.lastData);
+                const sourceStatuses = sourceNames.map(name => {
+                    const src = item.lastData[name];
+                    const age = now - new Date(src._logged_at).getTime();
+                    // Each source has its own age check
+                    if (age > TIMEOUT_MS) return 'Disconnect';
+                    return src._status || 'Normal';
+                });
+
+                // Rule-based consolidation:
+                if (sourceStatuses.length > 0) {
+                    if (sourceStatuses.every(s => s === 'Disconnect')) {
+                        finalStatus = 'Disconnect';
+                    } else if (sourceStatuses.some(s => s === 'Alarm' || s === 'Fail')) {
+                        finalStatus = 'Alarm';
+                    } else if (sourceStatuses.some(s => s === 'Warning' || s === 'Disconnect')) {
+                        // Partial failure (at least one is normal/other, but some are failing)
+                        finalStatus = 'Warning';
+                    } else {
+                        finalStatus = 'Normal';
+                    }
+                }
+            } else if (item.lastUpdate) {
+                // Fallback for equipment without grouped data
+                const lastUpdate = new Date(item.lastUpdate).getTime();
+                if (now - lastUpdate > TIMEOUT_MS) finalStatus = 'Disconnect';
+            }
+
+            // Update only if status changed
+            if (item.status !== finalStatus) {
+                console.log(`[WATCHDOG] Equipment ${item.name} status changed: ${item.status} -> ${finalStatus}`);
+                await equipmentService.updateEquipmentStatus(item.id, finalStatus);
+            }
+        }
+    } catch (error) {
+        console.error('[WATCHDOG] Error:', error);
     }
 }
 
@@ -1066,13 +1117,16 @@ async function startServices() {
         state.snmpTemplatesCache = await templateService.getAllTemplates();
         console.log(`[SNMP] ${state.snmpTemplatesCache.length} templates loaded from JSON`);
 
-        // 3. Start Background Schedulers (DISABLED)
-        // const collector = new DataCollectorScheduler(new EquipmentService(db));
-        // // Run every 2 minutes for stability
-        // setInterval(() => collector.collectAll(), 120000);
+        // 3. Start Background Schedulers
+        const collector = new DataCollectorScheduler(new EquipmentService(db));
+        // Run testing every 1 minute as requested
+        setInterval(() => collector.collectAll(), 60000);
+        
+        // Initial run after a short delay
+        setTimeout(() => collector.collectAll(), 5000);
 
-        // // Initial run after a short delay
-        // setTimeout(() => collector.collectAll(), 10000);
+        // 3.1 Start Watchdog (Check every 1 minute for 4-minute timeout)
+        setInterval(() => checkEquipmentWatchdog(), 60000);
 
         // 4. Initialize Surveillance Receivers if available (DISABLED)
         /*
@@ -1093,7 +1147,11 @@ async function startServices() {
         // Periodic cleanup
         setInterval(() => fileLogger.cleanupOldLogs(), 86400000);
 
-        console.log('[SYSTEM] Core services initialized (Background collection disabled)');
+        // 6. Start Network Listener for modular parsers (UDP/TCP)
+        const networkListener = require('./services/network_listener');
+        networkListener.initialize();
+
+        console.log('[SYSTEM] Core services initialized (1min polling & 4min watchdog active)');
     } catch (err) {
         console.error('[SYSTEM] Error during service initialization:', err);
     }
