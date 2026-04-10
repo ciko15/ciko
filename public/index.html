@@ -1855,21 +1855,65 @@
             </div>
           </div>
 
-          <!-- Connected Devices Scanner (NEW) -->
-          <div class="card" style="margin-top: 20px;" id="deviceScanSection">
+          <!-- TCP/IP Analyzer -->
+          <div class="card" style="margin-top: 20px;">
             <div class="card-header">
-              <h3><i class="fas fa-sitemap"></i> Connected Devices</h3>
-              <div style="display: flex; gap: 10px; align-items: center;">
-                <span>Devices: <strong id="connectedDevicesCount">0</strong></span>
-                <button class="btn btn-primary" id="scanDevicesBtn" onclick="scanConnectedDevices()">
-                  <i class="fas fa-search"></i> Scan Network
-                </button>
-              </div>
+              <h3><i class="fas fa-plug"></i> TCP/IP Analyzer & Connection Tester</h3>
             </div>
             <div class="card-body">
-              <div id="arpDevicesSection">
-                <div class="empty-state" id="arpDevicesContent" style="padding: 20px; text-align: center;">
-                  Click "Scan Network" to discover all connected IPs/MACs
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpGatewayIp">Gateway (Stage 1 Auth)</label>
+                  <input type="text" id="tcpGatewayIp" placeholder="e.g. 192.168.50.1 (Optional if direct)">
+                </div>
+                <div class="form-group">
+                  <label for="tcpDeviceIp">Device IP <span class="required-indicator">*</span></label>
+                  <input type="text" id="tcpDeviceIp" placeholder="e.g. 192.168.50.160">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="tcpPort">Port <span class="required-indicator">*</span></label>
+                  <input type="number" id="tcpPort" placeholder="e.g. 950">
+                </div>
+                <div class="form-group">
+                  <label for="tcpSyncMarker">Sync Marker (Hex Prefix)</label>
+                  <input type="text" id="tcpSyncMarker" placeholder="e.g. 50 4B 54 5F 43" value="50 4B 54 5F 43">
+                  <small style="color: var(--text-muted); margin-top: 4px; display: block;">Default: 50 4B 54 5F 43 (PKT_C - ILS)</small>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label>Port Scan Range (Optional)</label>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="number" id="tcpPortStart" placeholder="Start (e.g. 900)" style="flex:1;">
+                    <span>-</span>
+                    <input type="number" id="tcpPortEnd" placeholder="End (e.g. 970)" style="flex:1;">
+                    <button class="btn btn-secondary" onclick="scanTcpPorts()"><i class="fas fa-search"></i> Scan Ports</button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-actions" style="margin-top: 15px;">
+                <button class="btn btn-primary" id="btnTestTcpConnection" onclick="testTcpConnection()">
+                  <i class="fas fa-bolt"></i> Test Connection & Analyze
+                </button>
+              </div>
+
+              <!-- TCP Results Panel -->
+              <div id="tcpResultsPanel" style="margin-top: 20px; display: none; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 8px; border: 1px solid var(--border-color);">
+                <h4 style="margin-top:0; margin-bottom: 15px;"><i class="fas fa-poll-h"></i> Analysis Results</h4>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div class="detail-item"><span class="label" style="min-width: 150px; display: inline-block; font-weight: bold;">Gateway (Stage 1):</span><span class="value" id="tcpGateStatus">-</span></div>
+                  <div class="detail-item"><span class="label" style="min-width: 150px; display: inline-block; font-weight: bold;">Connection Status:</span><span class="value" id="tcpConnStatus">-</span></div>
+                  <div class="detail-item"><span class="label" style="min-width: 150px; display: inline-block; font-weight: bold;">Sync Marker:</span><span class="value" id="tcpMarkerStatus">-</span></div>
+                  <div class="detail-item" id="tcpPortScanResult" style="display:none;"><span class="label" style="min-width: 150px; display: inline-block; font-weight: bold;">Open Ports:</span><span class="value" id="tcpOpenPortsVal" style="font-family: monospace;">-</span></div>
+                  
+                  <div style="margin-top: 10px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 5px;">Raw Hex Payload:</label>
+                    <div id="tcpRawHex" style="background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 13px; padding: 12px; border-radius: 6px; min-height: 40px; word-break: break-all; border: 1px solid #333;">
+                      No data
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2079,93 +2123,23 @@
       <!-- Network Monitoring Dashboard Section -->
       <section class="content-section hidden" id="network-monitorSection">
         <div class="crud-container">
-          <!-- Network Stats Overview -->
-          <div class="card" style="margin-bottom: 20px;">
+          <!-- Connected Devices Scanner (NEW) -->
+          <div class="card" style="margin-top: 20px;" id="deviceScanSection">
             <div class="card-header">
-              <h2><i class="fas fa-chart-line"></i> Network Monitoring Dashboard</h2>
+              <h3><i class="fas fa-sitemap"></i> Connected Devices</h3>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <span>Devices: <strong id="connectedDevicesCount">0</strong></span>
+                <button class="btn btn-primary" id="scanDevicesBtn" onclick="scanConnectedDevices()">
+                  <i class="fas fa-search"></i> Scan Network
+                </button>
+              </div>
             </div>
             <div class="card-body">
-              <button class="btn btn-primary" onclick="refreshNetworkStats()" style="margin-bottom: 15px;">
-                <i class="fas fa-sync-alt"></i> Refresh Stats
-              </button>
-              <button class="btn btn-info" onclick="testConnectivity()" style="margin-bottom: 15px;">
-                <i class="fas fa-globe"></i> Test Connectivity
-              </button>
-            </div>
-          </div>
-
-          <!-- Network Interfaces -->
-          <div class="card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <h4><i class="fas fa-network-wired"></i> Component IP Authentication</h4>
-            </div>
-            <div class="card-body" id="networkInterfacesContent" style="overflow-x: auto;">
-              <div class="empty-state">Loading network interfaces...</div>
-            </div>
-          </div>
-
-          <!-- Interface Traffic Stats -->
-          <div class="card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <h3><i class="fas fa-bar-chart"></i> Interface Traffic (RX/TX)</h3>
-            </div>
-            <div class="card-body" id="trafficStatsContent" style="min-height: 300px;">
-              <canvas id="trafficChart"></canvas>
-            </div>
-          </div>
-
-          <!-- Connectivity Test Results -->
-          <div class="card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <h3><i class="fas fa-heartbeat"></i> Connectivity Status</h3>
-            </div>
-            <div class="card-body" id="connectivityContent">
-              <div class="empty-state">Click "Test Connectivity" to check network links</div>
-            </div>
-          </div>
-
-          <!-- System Network Info -->
-          <div class="card">
-            <div class="card-header">
-              <h3><i class="fas fa-info-circle"></i> System Information</h3>
-            </div>
-            <div class="card-body" id="systemNetworkInfoContent">
-              <div class="empty-state">Loading system information...</div>
-            </div>
-          </div>
-
-          <!-- Your Network Card -->
-          <div class="card"
-            style="margin-bottom: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-            <div class="card-header" style="border-bottom: 1px solid rgba(255,255,255,0.2);">
-              <h3 style="margin: 0;"><i class="fas fa-map-marker-alt"></i> Your Network Address</h3>
-            </div>
-            <div class="card-body" id="localNetworkInfoContent">
-              <div class="empty-state">Loading your network information...</div>
-            </div>
-          </div>
-
-          <!-- Connected Devices (ARP Table) -->
-          <div class="card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <h3><i class="fas fa-sitemap"></i> Connected Devices (ARP Table)</h3>
-              <button class="btn btn-small btn-primary" id="discoverDevicesBtn" onclick="discoverNetworkDevices()"
-                style="margin-left: 10px;">
-                <i class="fas fa-search"></i> Scan Network
-              </button>
-            </div>
-            <div class="card-body" id="connectedDevicesContent" style="overflow-x: auto;">
-              <div class="empty-state">Click "Scan Network" to discover connected devices...</div>
-            </div>
-          </div>
-
-          <!-- Discovered Active Devices -->
-          <div class="card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <h3><i class="fas fa-network-wired"></i> Active Devices On Network</h3>
-            </div>
-            <div class="card-body" id="discoveredDevicesContent" style="overflow-x: auto;">
-              <div class="empty-state">Scan network to see active devices...</div>
+              <div id="arpDevicesSection">
+                <div class="empty-state" id="arpDevicesContent" style="padding: 20px; text-align: center;">
+                  Click "Scan Network" to discover all connected IPs/MACs
+                </div>
+              </div>
             </div>
           </div>
         </div>

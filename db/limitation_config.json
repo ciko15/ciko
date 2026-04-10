@@ -64,7 +64,7 @@
     "name": "SDM",
     "category": "Navigation",
     "sup_category": "ILS-GP",
-    "value_type": "numeric",
+    "value_type": "percent",
     "min_warning_limit": "78",
     "min_alarm_limit": "76",
     "max_warning_limit": "82",

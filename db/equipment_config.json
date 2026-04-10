@@ -10,7 +10,7 @@
     "lat": -2.57835,
     "lng": 140.516478,
     "airportId": 1,
-    "isActive": false,
+    "isActive": true,
     "branchId": 1,
     "description": "",
     "status_ops": "Normal",

@@ -174,7 +174,7 @@ class PacketSniffer {
   finalizePacket(packet) {
       if (packet) {
           this.packets.push(packet);
-          if (this.packets.length > 1000) {
+          if (this.packets.length > 2500) {
               this.packets.shift();
           }
       }
@@ -197,12 +197,25 @@ class PacketSniffer {
         rawData: ''
       };
 
+      // Helper function to format IP and Port
+      function formatIpPort(address) {
+          if (!address) return address;
+          const parts = address.split('.');
+          if (parts.length > 4 && !address.includes(':')) {
+              // Extract the port (last segment)
+              const port = parts.pop();
+              const ip = parts.join('.');
+              return `${ip}:${port}`;
+          }
+          return address;
+      }
+
       // More flexible regex to handle various tcpdump outputs (IP or hostname)
       const match = line.match(/^(\d{2}:\d{2}:\d{2}\.\d+)\s+(\S+)\s+(.+?)\s+>\s+(.+?):\s*(.*)$/);
       if (match) {
         packet.protocol = match[2];
-        packet.source = match[3];
-        packet.destination = match[4];
+        packet.source = formatIpPort(match[3]);
+        packet.destination = formatIpPort(match[4]);
         packet.info = match[5];
       } else {
           // Fallback regex for simpler formats (like ARP)
@@ -376,7 +389,7 @@ class PacketSniffer {
       result = result.filter(p => p.interface === filter.interface);
     }
 
-    return result.slice(-500);
+    return result.slice(-2000);
   }
 
   getStatistics() {

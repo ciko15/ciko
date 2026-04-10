@@ -69,7 +69,7 @@ async function loadNetworkInterfaces() {
     } else {
       console.warn('[Network Monitor] Failed to load interfaces:', result);
       const content = document.getElementById('networkInterfacesContent');
-      if (content) content.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center; color: #ef4444;">❌ Failed to load network interfaces</div>';
+      if (content) content.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: #ef4444;">❌ Access Denied: ${result.error || 'Failed to load interfaces'}</div>`;
     }
   } catch (error) {
     console.error('[Network Monitor] Error loading interfaces:', error);
@@ -339,6 +339,13 @@ async function loadLocalNetworkInfo() {
       const content = document.getElementById('localNetworkInfoContent');
       if (content) {
         content.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center; color: #999;">Unable to detect local network information</div>';
+      }
+    } else {
+      // Handle success: false (e.g., 401 Unauthorized)
+      console.error('[Network Monitor] Failed to load local info:', result.error || 'Unknown error');
+      const content = document.getElementById('localNetworkInfoContent');
+      if (content) {
+        content.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: #ef4444;">❌ Access Denied: ${result.error || 'Please login'}</div>`;
       }
     }
   } catch (error) {

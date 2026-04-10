@@ -397,18 +397,19 @@ class NetworkMonitor {
    */
   async getArpTable() {
     try {
-      let command = '';
+      let command = 'arp -an'; // default to -an for safety against dns timeouts
       const platform = os.platform();
+      console.log("[Network Monitor] Current OS platform is:", platform);
 
       if (platform === 'darwin') {
         // macOS
-        command = 'arp -a';
+        command = 'arp -an';
       } else if (platform === 'linux') {
         // Linux
         command = 'cat /proc/net/arp';
       } else if (platform === 'win32') {
         // Windows
-        command = 'arp -a';
+        command = 'arp -a'; // Windows only supports -a
       }
 
       const { stdout } = await execPromise(command, { timeout: 5000 });
@@ -501,7 +502,11 @@ class NetworkMonitor {
       }
 
       console.log(`[Network Monitor] Scanning ${validInterfaces.length} interfaces...`);
-      const commonIps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 50, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 254];
+      const commonIps = [
+        1, 2, 3, 4, 5, 8, 10, 11, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 
+        100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 120, 130, 140, 150, 
+        200, 210, 220, 230, 240, 250, 254
+      ];
       const allPromises = [];
 
       for (const iface of validInterfaces) {
@@ -584,43 +589,59 @@ class NetworkMonitor {
   }
 
   /**
-   * Get local network information
+   * Get local network information using native OS module for stability
    */
   async getLocalNetworkInfo() {
     try {
-      const interfaces = await this.getNetworkInterfaces();
-      
-      // Find primary active interface (prefer non-loopback with IP)
-      let primaryInterface = interfaces.find(i => 
-        i.ip4 && 
-        i.ip4 !== '127.0.0.1' && 
-        (i.operstate === 'UP' || i.operstate === 'up' || i.operstate === 'unknown')
-      );
-      
-      // Fallback: just find any interface with an IP
-      if (!primaryInterface) {
-        primaryInterface = interfaces.find(i => i.ip4 && i.ip4 !== '127.0.0.1');
+      const os = require('os');
+      const networkInterfaces = os.networkInterfaces();
+      let primaryInfo = null;
+
+      // Iterate through interfaces to find a valid IPv4
+      for (const name of Object.keys(networkInterfaces)) {
+        const ifaces = networkInterfaces[name];
+        for (const details of ifaces) {
+          if (details.family === 'IPv4' && !details.internal) {
+            // Prefer UP/Active-like interfaces
+            const parts = details.address.split('.');
+            const networkPrefix = parts.slice(0, 3).join('.');
+            
+            primaryInfo = {
+              yourIP: details.address,
+              yourMAC: details.mac || 'Unknown',
+              interface: name,
+              networkPrefix: networkPrefix,
+              networkRange: `${networkPrefix}.0 - ${networkPrefix}.255`,
+              gateway: `${networkPrefix}.1 (typical)`
+            };
+            break;
+          }
+        }
+        if (primaryInfo) break;
       }
 
-      if (!primaryInterface) {
-        return null;
+      if (!primaryInfo) {
+        return {
+          yourIP: 'Unknown',
+          yourMAC: 'Unknown',
+          interface: 'None',
+          networkPrefix: '0.0.0',
+          networkRange: 'Unknown',
+          gateway: 'Unknown'
+        };
       }
 
-      const ip = primaryInterface.ip4;
-      const parts = ip.split('.');
-      const networkPrefix = parts.slice(0, 3).join('.');
-
-      return {
-        yourIP: ip,
-        yourMAC: primaryInterface.mac || 'Unknown',
-        interface: primaryInterface.name,
-        networkPrefix,
-        networkRange: `${networkPrefix}.0 - ${networkPrefix}.255`,
-        gateway: `${networkPrefix}.1 (typical)`
-      };
+      return primaryInfo;
     } catch (error) {
-      console.error('[Network Monitor] Error getting local network info:', error);
-      return null;
+      console.error('[Network Monitor] Error getting local info via OS module:', error.message);
+      return {
+        yourIP: 'Unknown',
+        yourMAC: 'Unknown',
+        interface: 'None',
+        networkPrefix: '0.0.0',
+        networkRange: 'Unknown',
+        gateway: 'Unknown'
+      };
     }
   }
 }
