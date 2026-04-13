@@ -39,5 +39,12 @@
     "category": "Communication",
     "files": "/src/parsers/rcms.js",
     "createdAt": "2026-04-07T12:45:19.540Z"
+  },
+  {
+    "id": "snmp_host_resources_01",
+    "name": "SNMP Host Resources",
+    "description": "Parser untuk membaca kapasitas RAM, Disk, dan CPU via SNMP",
+    "files": "/src/parsers/snmp_host_resources.js",
+    "category": "Data Processing"
   }
 ]

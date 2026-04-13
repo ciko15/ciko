@@ -11,7 +11,6 @@
     "isActive": true,
     "branchId": 1,
     "description": "",
-    "status_ops": "Normal",
     "dataSources": [],
     "lat": -2.57835,
     "lng": 140.516483
@@ -27,7 +26,6 @@
     "sup_category": "RADAR",
     "merk": "INDRA",
     "type": "2100",
-    "status_ops": "Normal",
     "description": "",
     "dataSources": [],
     "lat": -2.598636,
@@ -47,7 +45,6 @@
     "sup_category": "ATCAS",
     "merk": "",
     "type": "",
-    "status_ops": "Normal",
     "dataSources": []
   },
   {
@@ -64,7 +61,6 @@
     "sup_category": "VHF A/G",
     "merk": "PAE",
     "type": "",
-    "status_ops": "Normal",
     "dataSources": []
   },
   {
@@ -74,7 +70,6 @@
     "merk": "THALES",
     "type": "421",
     "status": "Active",
-    "status_ops": "Normal",
     "airportId": 1,
     "description": "",
     "isActive": true,
@@ -92,7 +87,6 @@
     "merk": "-",
     "type": "-",
     "status": "Active",
-    "status_ops": "Normal",
     "airportId": 1,
     "description": "",
     "isActive": true,
@@ -109,7 +103,6 @@
     "merk": "THALES",
     "type": "422",
     "status": "Disconnect",
-    "status_ops": "Disconnect",
     "airportId": 1,
     "lat": -2.569864,
     "lng": 140.507771,
@@ -117,5 +110,35 @@
     "isActive": true,
     "dataSources": [],
     "branchId": 1
+  },
+  {
+    "id": "2001",
+    "code": "DEV-01",
+    "name": "Server Node 147",
+    "category": "Data Processing",
+    "status": "Normal",
+    "merk": "HP ProLiant",
+    "type": "DL380",
+    "lat": -2.5768,
+    "lng": 140.5163,
+    "airportId": 1,
+    "isActive": true,
+    "sup_category": "ATCAS",
+    "description": "",
+    "dataSources": [],
+    "branchId": 1
+  },
+  {
+    "id": 2002,
+    "code": "DEV-02",
+    "name": "Server Node 47",
+    "category": "Data Processing",
+    "status": "Normal",
+    "merk": "Dell PowerEdge",
+    "type": "R740",
+    "lat": -2.5768,
+    "lng": 140.5163,
+    "airportId": 1,
+    "isActive": true
   }
 ]
