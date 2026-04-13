@@ -192,14 +192,15 @@ const cabangModule = (function() {
           dataHtml = `<div class="card-sources-container">
             ${sources.map(sourceName => {
               const sourceData = item.lastData[sourceName];
-              const dataKeys = Object.keys(sourceData).filter(k => !k.startsWith('_') && k !== 'error' && k !== 'cached').slice(0, 4);
+              const dataKeys = Object.keys(sourceData).filter(k => !k.startsWith('_') && k !== 'error' && k !== 'cached').slice(0, 8);
               const srcStatus = sourceData._status || 'Normal';
               const srcTime = sourceData._logged_at ? new Date(sourceData._logged_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
               
               const statusClass = srcStatus.toLowerCase();
+              const isStale = srcStatus === 'Disconnect';
               
               return `
-                <div class="source-group ${statusClass}">
+                <div class="source-group ${statusClass} ${isStale ? 'stale' : ''}">
                   <div class="source-header">
                     <div class="source-header-main">
                       <i class="fas fa-microchip"></i>
@@ -215,9 +216,13 @@ const cabangModule = (function() {
                       const label = isObj && valObj.label ? valObj.label : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                       const val = isObj ? valObj.value : valObj;
                       const unit = isObj && valObj.unit ? valObj.unit : '';
-                      return `<div class="data-point">
+                      
+                      // Highlight value if stale
+                      const valDisplay = isStale ? `<span class="stale-value">${val}</span>` : val;
+                      
+                      return `<div class="data-point ${isStale ? 'stale' : ''}">
                         <span class="data-label">${label}</span>
-                        <span class="data-value">${val}${unit}</span>
+                        <span class="data-value">${valDisplay}${unit}</span>
                       </div>`;
                     }).join('') : `
                       <div class="data-point empty">
