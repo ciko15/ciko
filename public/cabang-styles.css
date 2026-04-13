@@ -403,6 +403,22 @@
   display: none; /* Menghilangkan dot/titik sebelum status */
 }
 
+/* Stale Data Styling */
+.source-group.stale {
+  border-color: var(--monitoring-border);
+  opacity: 0.8;
+}
+
+.data-point.stale .data-value {
+  color: var(--monitoring-text-muted);
+  font-style: italic;
+}
+
+.stale-value {
+  text-decoration: line-through rgba(148, 163, 184, 0.5);
+  margin-right: 4px;
+}
+
 /* Card Body */
 .equipment-card-body {
   margin-bottom: 15px;

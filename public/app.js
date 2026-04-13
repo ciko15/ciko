@@ -370,8 +370,18 @@ async function loadParsingConfig() {
     const res = await fetch(`${API_URL}/config/parsings`, {
       headers: getAuthHeaders()
     });
+    
+    if (!res.ok) {
+      console.error(`Failed to load parsing config: ${res.status} ${res.statusText}`);
+      const errorText = await res.text().catch(() => '');
+      console.error('Error details:', errorText);
+      return [];
+    }
+    
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.data || []);
+    const parsingList = Array.isArray(data) ? data : (data.data || []);
+    console.log(`[Config] Loaded ${parsingList.length} parsing templates`);
+    return parsingList;
   } catch (err) {
     console.error('Error loading parsing config:', err);
     return [];
@@ -384,7 +394,10 @@ window.showAddDataSourceForm = async function (equipmentId, editSource = null) {
   const form = document.getElementById('addDataSourceForm');
   const titleEl = modal.querySelector('.modal-header h3');
 
-  if (!modal || !form) return;
+  if (!modal || !form) {
+    console.error('Modal or form not found for Add Data Source');
+    return;
+  }
 
   // Initialize fields
   const equipmentIdDisplay = document.getElementById('equipmentIdDisplay');
@@ -413,8 +426,14 @@ window.showAddDataSourceForm = async function (equipmentId, editSource = null) {
   }
 
   if (templateSelect) {
-    templateSelect.innerHTML = '<option value="">Pilih Template</option>' +
-      parsingConfig.map(p => `<option value="${p.id}" ${editSource && editSource.parsing_id == p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+    // Robust template population
+    const options = parsingConfig.map(p => {
+      const isSelected = editSource && String(editSource.parsing_id) === String(p.id);
+      return `<option value="${p.id}" ${isSelected ? 'selected' : ''}>${p.name}</option>`;
+    });
+    
+    templateSelect.innerHTML = '<option value="">Pilih Template</option>' + options.join('');
+    console.log(`[UI] Populated ${options.length} options into template selector`);
   }
 
   // Show modal
@@ -782,7 +801,7 @@ async function handleEquipmentSubmit(e) {
     merk: document.getElementById('equipmentMerk').value,
     type: document.getElementById('equipmentType').value,
     status: 'Active',
-    status_ops: 'Normal', // Default as field was removed
+    status: 'Normal',
     airportId: document.getElementById('equipmentAirport').value,
     lat: latVal ? parseFloat(latVal) : null,
     lng: lngVal ? parseFloat(lngVal) : null,
@@ -919,7 +938,7 @@ window.viewEquipmentDetail = async function (id) {
         <p><strong>Name:</strong> ${item.name}</p>
         <p><strong>Category:</strong> ${item.category} / ${item.sup_category || '-'}</p>
         <p><strong>Brand/Type:</strong> ${item.merk || '-'} / ${item.type || '-'}</p>
-        <p><strong>Status Operasional:</strong> <span class="status-badge ${item.status_ops || item.status}">${item.status_ops || item.status}</span></p>
+        <p><strong>Status:</strong> <span class="status-badge ${item.status}">${item.status}</span></p>
         <p><strong>Coordinate:</strong> ${item.lat}, ${item.lng}</p>
         <p><strong>Description:</strong> ${item.description || '-'}</p>
       </div>

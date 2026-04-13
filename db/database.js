@@ -185,13 +185,16 @@ async function getAllEquipment(filters = {}) {
         for (const log of latestLogs) {
           const sourceName = log.source || 'default';
           const logTime = new Date(log.logged_at).getTime();
-          const isTimedOut = (now - logTime) > (4 * 60 * 1000); // 4 minutes
+          const isTimedOut = (now - logTime) > (10 * 60 * 1000); // 10 minutes
           
           if (isTimedOut) {
-            // Force values to '-' by using the pre-initialized mergedData[sourceName]
-            // which already contains the PARSER_TEMPLATES placeholders
-            mergedData[sourceName]._status = 'Disconnect';
-            mergedData[sourceName]._logged_at = log.logged_at;
+            // Keep data but set status to Disconnect
+            mergedData[sourceName] = {
+              ...mergedData[sourceName],
+              ...(log.data || {}),
+              _status: 'Disconnect',
+              _logged_at: log.logged_at
+            };
           } else {
             // Valid fresh data
             mergedData[sourceName] = {
@@ -279,10 +282,10 @@ async function getEquipmentStatsSummary() {
   const stats = {
     total: equipmentList.length,
     statuses: [
-      { status: 'Normal', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Normal').length },
-      { status: 'Warning', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Warning').length },
-      { status: 'Alert', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Alert').length },
-      { status: 'Disconnect', count: equipmentList.filter(e => (e.status_ops || e.status) === 'Disconnect').length }
+      { status: 'Normal', count: equipmentList.filter(e => e.status === 'Normal').length },
+      { status: 'Warning', count: equipmentList.filter(e => e.status === 'Warning').length },
+      { status: 'Alert', count: equipmentList.filter(e => e.status === 'Alert').length },
+      { status: 'Disconnect', count: equipmentList.filter(e => e.status === 'Disconnect').length }
     ],
     categories: [
       { category: 'Communication', count: equipmentList.filter(e => e.category === 'Communication').length },
@@ -306,7 +309,6 @@ async function createEquipment(data) {
     ...data,
     id: Number(data.id) || Date.now(),
     status: data.status || 'Normal',
-    status_ops: data.status_ops || 'Normal',
     merk: data.merk || '-',
     type: data.type || '-',
     lat: parseFloat(data.lat) || 0,
