@@ -27,15 +27,15 @@ const pluralMap = {
 // Helper to get auth headers
 function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json' };
-  
+
   // Refresh token from URL if needed (in case of dynamic navigation)
   if (!authToken) {
-      const urlToken = new URLSearchParams(window.location.search).get('token');
-      if (urlToken) authToken = urlToken;
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    if (urlToken) authToken = urlToken;
   }
-  
+
   if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
+    headers['Authorization'] = `Bearer ${authToken}`;
   }
   return headers;
 }
@@ -265,12 +265,12 @@ window.enableMapPick = function (type) {
   // Base coords (Sentani)
   let currentLat = -2.5768;
   let currentLng = 140.5163;
-  
+
   // Try to get current values from the form to center map
   const prefix = type === 'airport' ? 'airport' : 'equipment';
   const valLat = document.getElementById(prefix + 'Lat')?.value;
   const valLng = document.getElementById(prefix + 'Lng')?.value;
-  
+
   if (valLat && !isNaN(parseFloat(valLat))) currentLat = parseFloat(valLat);
   if (valLng && !isNaN(parseFloat(valLng))) currentLng = parseFloat(valLng);
 
@@ -880,7 +880,7 @@ window.editEquipment = async function (id) {
 
     // Filter authentications for this equipment (robust comparison)
     const mySources = (authenticationsData || []).filter(auth => String(auth.equipt_id) === String(item.id));
-    
+
     if (mySources.length > 0) {
       mySources.forEach(source => window.addDataSourceRow(source.id));
     }
@@ -903,7 +903,7 @@ window.viewEquipmentDetail = async function (id) {
     if (typeof loadAuthentications === 'function' && (!authenticationsData || authenticationsData.length === 0)) {
       await loadAuthentications();
     }
-    
+
     // 2. Fetch Parsing Configs
     let parsings = [];
     if (typeof loadParsingConfig === 'function') {
@@ -912,7 +912,7 @@ window.viewEquipmentDetail = async function (id) {
 
     // Filter sources for this equipment (using loose equality for string/number id)
     const mySources = (authenticationsData || []).filter(auth => String(auth.equipt_id) === String(item.id));
-    
+
     const generalInfoHtml = `
       <div class="detail-card">
         <h4><i class="fas fa-info-circle"></i> General Information</h4>
@@ -942,8 +942,8 @@ window.viewEquipmentDetail = async function (id) {
               </thead>
               <tbody>
                 ${mySources.map(source => {
-                  const template = (parsings || []).find(p => String(p.id) === String(source.parsing_id));
-                  return `
+        const template = (parsings || []).find(p => String(p.id) === String(source.parsing_id));
+        return `
                     <tr style="border-bottom: 1px solid var(--border-color);">
                       <td style="padding: 10px;">${source.name}</td>
                       <td style="padding: 10px; font-family: monospace;">${source.ip_address}</td>
@@ -953,7 +953,7 @@ window.viewEquipmentDetail = async function (id) {
                       </td>
                     </tr>
                   `;
-                }).join('')}
+      }).join('')}
               </tbody>
             </table>
           </div>
@@ -995,8 +995,8 @@ window.viewEquipmentDetail = async function (id) {
             </thead>
             <tbody>
               ${matchingLimits.map(limit => {
-                const isNumeric = (limit.value_type === 'numeric' || limit.value_type === 'percent' || !limit.value_type);
-                const thresholdHtml = isNumeric ? `
+        const isNumeric = (limit.value_type === 'numeric' || limit.value_type === 'percent' || !limit.value_type);
+        const thresholdHtml = isNumeric ? `
                   <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                     <span class="status-badge Alert" style="padding: 2px 6px; font-size: 0.75rem;" title="Alarm Low">${limit.min_alarm_limit || limit.alv || '-'}</span>
                     <span class="status-badge Warning" style="padding: 2px 6px; font-size: 0.75rem;" title="Warning Low">${limit.min_warning_limit || limit.wlv || '-'}</span>
@@ -1005,7 +1005,7 @@ window.viewEquipmentDetail = async function (id) {
                   </div>
                 ` : '<span class="text-muted" style="font-size: 0.75rem;">Non-numeric</span>';
 
-                return `
+        return `
                   <tr style="border-bottom: 1px solid var(--border-color);">
                     <td style="padding: 8px; font-weight: 600; color: var(--text-primary);">${limit.name}</td>
                     <td style="padding: 8px;">${limit.expected_value || limit.value || '-'}</td>
@@ -1015,7 +1015,7 @@ window.viewEquipmentDetail = async function (id) {
                     <td style="padding: 8px;">${thresholdHtml}</td>
                   </tr>
                 `;
-              }).join('')}
+      }).join('')}
             </tbody>
           </table>
         </div>
@@ -1212,7 +1212,7 @@ function updateAuthUI() {
 async function handleLogin(e) {
   e.preventDefault();
   const form = e.target;
-  
+
   // Get fields specifically from the form that was submitted
   const usernameEl = form.querySelector('#sidebarUsername, #username, input[type="text"]');
   const passwordEl = form.querySelector('#sidebarPassword, #password, input[type="password"]');
@@ -1379,7 +1379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-  
+
   document.getElementById('menuToggle').addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('active');
   });
@@ -1390,7 +1390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     sidebarToggle.addEventListener('click', () => {
       const sidebar = document.getElementById('sidebar');
       sidebar.classList.toggle('minimized');
-      
+
       const icon = sidebarToggle.querySelector('i');
       if (sidebar.classList.contains('minimized')) {
         icon.classList.replace('fa-chevron-left', 'fa-chevron-right');
@@ -1640,7 +1640,7 @@ function updateAuthenticationFilterOptions() {
   uniqueEquiptIds.forEach(id => {
     const equipt = (equipmentData || []).find(e => String(e.id) === String(id));
     const name = equipt ? equipt.name : `ID: ${id}`;
-    
+
     const option = document.createElement('option');
     option.value = id;
     option.textContent = name;
@@ -1726,7 +1726,7 @@ window.renderConfigTable = function (tab, data, tbody) {
     if (tab === 'limitation') {
       const minLimits = `min: ${item.min_alarm_limit || item.alv || '-'} / ${item.min_warning_limit || item.wlv || '-'}`;
       const maxLimits = `max: ${item.max_warning_limit || item.whv || '-'} / ${item.max_alarm_limit || item.ahv || '-'}`;
-      
+
       tr.innerHTML = `
         <td><strong>${item.name}</strong></td>
         <td><span class="badge badge-info">${item.sup_category}</span></td>
@@ -1746,7 +1746,7 @@ window.renderConfigTable = function (tab, data, tbody) {
     } else if (tab === 'authentication') {
       const equipt = (equipmentData || []).find(e => String(e.id) === String(item.equipt_id));
       const equiptName = equipt ? equipt.name : (item.equipt_id ? `ID: ${item.equipt_id}` : '<span class="text-muted">Global</span>');
-      
+
       tr.innerHTML = `
         <td><strong>${item.name}</strong></td>
         <td><code>${item.ip_address}</code></td>
@@ -2019,7 +2019,7 @@ window.updateSubCategoryDropdown = function (category, selectId) {
 
   const group = supCategoriesData.find(c => c.category === category);
   const options = group ? (group.sub_categories || []) : [];
-  
+
   if (options.length === 0) {
     select.innerHTML = '<option value="">No sub-categories found</option>';
   } else {
@@ -2240,7 +2240,7 @@ window.loadHistoryLogs = loadHistoryLogs;
 // --- FILE PICKER LOGIC ---
 let currentPickerTarget = null;
 
-window.openFilePicker = function(targetName) {
+window.openFilePicker = function (targetName) {
   currentPickerTarget = targetName;
   const modal = document.getElementById('filePickerModal');
   if (modal) modal.classList.remove('hidden');
@@ -2248,10 +2248,10 @@ window.openFilePicker = function(targetName) {
   window.listPickerFiles('src/parsers');
 };
 
-window.listPickerFiles = async function(path) {
+window.listPickerFiles = async function (path) {
   const listContainer = document.getElementById('filePickerList');
   const breadcrumbs = document.getElementById('filePickerBreadcrumbs');
-  
+
   if (listContainer) {
     listContainer.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading directory...</div>';
   }
@@ -2292,10 +2292,10 @@ window.listPickerFiles = async function(path) {
         } else {
           data.contents.forEach(item => {
             const icon = item.isDir ? 'fa-folder' : 'fa-file-code';
-            const action = item.isDir 
-              ? `window.listPickerFiles('${item.path}')` 
+            const action = item.isDir
+              ? `window.listPickerFiles('${item.path}')`
               : `window.selectPickerFile('${item.path}')`;
-            
+
             lHtml += `
               <div class="file-item ${item.isDir ? 'directory' : 'file'}" onclick="${action}">
                 <i class="fas ${icon}"></i>
@@ -2314,7 +2314,7 @@ window.listPickerFiles = async function(path) {
   }
 };
 
-window.selectPickerFile = function(path) {
+window.selectPickerFile = function (path) {
   if (currentPickerTarget) {
     const input = document.querySelector(`input[name="${currentPickerTarget}"]`);
     if (input) {

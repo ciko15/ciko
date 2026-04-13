@@ -380,10 +380,6 @@ function displayPacketDetails(packetNumber) {
             hexContent.innerHTML = `<div class="empty-state">Select a packet to view hex data</div>`;
         }
         
-        const analysisContent = document.getElementById('packetAnalysisContent');
-        if (analysisContent) {
-            analysisContent.innerHTML = `<div class="empty-state">Select a packet to perform content analysis</div>`;
-        }
         
         return;
     }
@@ -414,7 +410,7 @@ function displayPacketDetails(packetNumber) {
     `;
     
     displayHexViewer(packet);
-    analyzePacketContent(packet);
+    autoFillTcpAnalyzer(packet);
   } catch (error) {
     console.error('[Network Tools] Display details error:', error);
   }
@@ -460,8 +456,8 @@ function displayHexViewer(packet) {
   }
 }
 
-// New packet content analysis logic
-function analyzePacketContent(packet) {
+// Extract fields from packet to auto-fill TCP Analyzer
+function autoFillTcpAnalyzer(packet) {
     try {
         const dest = packet.destination || '';
         if (!dest) return;

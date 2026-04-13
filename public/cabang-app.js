@@ -193,14 +193,23 @@ const cabangModule = (function() {
             ${sources.map(sourceName => {
               const sourceData = item.lastData[sourceName];
               const dataKeys = Object.keys(sourceData).filter(k => !k.startsWith('_') && k !== 'error' && k !== 'cached').slice(0, 4);
+              const srcStatus = sourceData._status || 'Normal';
+              const srcTime = sourceData._logged_at ? new Date(sourceData._logged_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
               
-              if (dataKeys.length === 0) return '';
+              const statusClass = srcStatus.toLowerCase();
               
               return `
-                <div class="source-group">
-                  <div class="source-header"><i class="fas fa-microchip"></i> ${sourceName}</div>
+                <div class="source-group ${statusClass}">
+                  <div class="source-header">
+                    <div class="source-header-main">
+                      <i class="fas fa-microchip"></i>
+                      <span class="source-name-text">${sourceName}</span>
+                      <span class="source-status-pill ${statusClass}">${srcStatus}</span>
+                    </div>
+                    <div class="source-header-time">${srcTime}</div>
+                  </div>
                   <div class="card-data-grid">
-                    ${dataKeys.map(key => {
+                    ${dataKeys.length > 0 ? dataKeys.map(key => {
                       const valObj = sourceData[key];
                       const isObj = valObj !== null && typeof valObj === 'object';
                       const label = isObj && valObj.label ? valObj.label : key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -210,7 +219,12 @@ const cabangModule = (function() {
                         <span class="data-label">${label}</span>
                         <span class="data-value">${val}${unit}</span>
                       </div>`;
-                    }).join('')}
+                    }).join('') : `
+                      <div class="data-point empty">
+                        <span class="data-label">Status</span>
+                        <span class="data-value">${srcStatus}</span>
+                      </div>
+                    `}
                   </div>
                 </div>
               `;
