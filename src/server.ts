@@ -164,17 +164,27 @@ async function checkEquipmentWatchdog() {
                     return src._status || 'Normal';
                 });
 
-                // Rule-based consolidation:
+                // Rule-based consolidation (Refined logic for issue requirements)
                 if (sourceStatuses.length > 0) {
-                    if (sourceStatuses.every(s => s === 'Disconnect')) {
-                        finalStatus = 'Disconnect';
-                    } else if (sourceStatuses.some(s => s === 'Alarm' || s === 'Fail')) {
-                        finalStatus = 'Alarm';
-                    } else if (sourceStatuses.some(s => s === 'Warning' || s === 'Disconnect')) {
-                        // Partial failure (at least one is normal/other, but some are failing)
-                        finalStatus = 'Warning';
+                    if (sourceStatuses.length > 1) {
+                        // MULTI-SOURCE LOGIC
+                        if (sourceStatuses.every(s => s === 'Alarm' || s === 'Fail')) {
+                            finalStatus = 'Alarm';
+                        } else if (sourceStatuses.every(s => s === 'Disconnect')) {
+                            finalStatus = 'Disconnect';
+                        } else if (sourceStatuses.some(s => s === 'Alarm' || s === 'Fail' || s === 'Warning' || s === 'Disconnect')) {
+                            // If any source is failing but not all are Alarm/Disconnect, it's a Warning
+                            finalStatus = 'Warning';
+                        } else {
+                            finalStatus = 'Normal';
+                        }
                     } else {
-                        finalStatus = 'Normal';
+                        // SINGLE SOURCE LOGIC
+                        const s = sourceStatuses[0];
+                        if (s === 'Disconnect') finalStatus = 'Disconnect';
+                        else if (s === 'Alarm' || s === 'Fail') finalStatus = 'Alarm';
+                        else if (s === 'Warning') finalStatus = 'Warning';
+                        else finalStatus = 'Normal';
                     }
                 }
             } else if (item.lastUpdate) {
