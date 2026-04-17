@@ -7,6 +7,7 @@ const RcmsParser = require('./rcms');
 const DvorMaru220Parser = require('./dvor_maru_220');
 const DmeMaru310320Parser = require('./dme_maru_310_320');
 const AsterixParser = require('./asterix_parser');
+const SnmpHostResourcesParser = require('./snmp_host_resources');
 
 class ParserFactory {
     /**
@@ -34,6 +35,10 @@ class ParserFactory {
                 console.warn('[ParserFactory] SNMP uses SNMP service, not parser');
                 return null;
             
+            case 'snmp_host_resources_01':
+                return SnmpHostResourcesParser;
+            
+
             case 'json':
                 // JSON parser for API-based equipment
                 return new JsonParser(config);

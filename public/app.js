@@ -1288,7 +1288,7 @@ function initNavigation() {
 
   const switchSection = (sectionId) => {
     // Basic protection: don't allow restricted sections without a token
-    const restrictedSections = ['equipment', 'airports', 'equipment-logs', 'users', 'configure', 'network-tools', 'network-monitor'];
+    const restrictedSections = ['equipment', 'airports', 'equipment-logs', 'users', 'configure', 'network-tools', 'network-monitor', 'analytics-dashboard'];
     if (!authToken && restrictedSections.includes(sectionId)) {
       sectionId = 'dashboard';
     }
@@ -1312,6 +1312,9 @@ function initNavigation() {
       if (sectionId === 'network-monitor' && typeof window.initNetworkMonitor === 'function') {
         window.initNetworkMonitor();
       }
+      if (sectionId === 'analytics-dashboard' && typeof window.populateEquipmentSelect === 'function') {
+        window.populateEquipmentSelect();
+      }
     }
 
     localStorage.setItem('currentSection', sectionId);
@@ -1325,7 +1328,8 @@ function initNavigation() {
         airports: 'Airports',
         'equipment-logs': 'History Logs',
         users: 'Users',
-        configure: 'System Configuration'
+        configure: 'System Configuration',
+        'analytics-dashboard': 'Analytic Dashboard'
       };
       hb.innerHTML = `<span>${labels[sectionId] || sectionId}</span>`;
     }
@@ -1347,6 +1351,9 @@ function initNavigation() {
     }
   };
 
+  // Export to window so other scripts can call it
+  window.switchSection = switchSection;
+
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1357,11 +1364,50 @@ function initNavigation() {
   switchSection(lastSection);
 }
 
+/**
+ * NEW: Dashboard Stat Cards Interactivity
+ * Clicking a stat card on dashboard redirects to Cabang view with relevant filter
+ */
+function initDashboardInteractivity() {
+  const statCards = document.querySelectorAll('#dashboardSection .stat-card');
+  
+  statCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const h3 = card.querySelector('h3');
+      if (!h3) return;
+      
+      const label = h3.textContent.trim();
+      let targetStatus = '';
+      
+      if (label === 'Normal') targetStatus = 'Normal';
+      else if (label === 'Warning') targetStatus = 'Warning';
+      else if (label === 'Alert') targetStatus = 'Alert';
+      else if (label === 'Disconnect') targetStatus = 'Disconnect';
+      // 'Total' means empty targetStatus (All)
+      
+      console.log(`[Dashboard] Stat clicked: ${label} -> Switching to Cabang with filter: ${targetStatus}`);
+      
+      // 1. Navigate to Cabang
+      if (typeof window.switchSection === 'function') {
+        window.switchSection('cabang');
+      }
+      
+      // 2. Apply Filter in Cabang Module
+      if (window.cabangModule && typeof window.cabangModule.setFilters === 'function') {
+        // We use undefined for category to keep current or reset to all depending on setFilters implementation
+        // cabangModule.setFilters(category, status)
+        window.cabangModule.setFilters('', targetStatus);
+      }
+    });
+  });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   initMap();
   initNavigation();
+  initDashboardInteractivity();
   updateAuthUI();
 
   // Always load public data for dashboard
