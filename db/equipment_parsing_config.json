@@ -46,5 +46,12 @@
     "description": "Parser untuk membaca kapasitas RAM, Disk, dan CPU via SNMP",
     "files": "/src/parsers/snmp_host_resources.js",
     "category": "Data Processing"
+  },
+  {
+    "id": "thales_llz_421",
+    "name": "Localizer Thales 421",
+    "category": "Navigation",
+    "files": "/src/parsers/thales_llz_421.js",
+    "createdAt": "2026-04-14T07:47:57.025Z"
   }
 ]

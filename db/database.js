@@ -17,7 +17,7 @@ const PARSER_TEMPLATES = {
   'dvor_maru_220': ['latitude', 'longitude', 'altitude', 'groundSpeed', 'trackAngle'],
   'custom_1775446808830': ['m1_sys_delay', 'm1_reply_eff', 'm1_fwd_power', 'm1_5v_ps', 'm1_15v_ps', 'm1_48v_ps', 'ident'],
   'custom_1775512889323': ['latitude', 'longitude', 'altitude', 'groundSpeed', 'trackAngle'],
-  'custom_1775563814757': ['mon1_rf_level', 'mon1_30hz_am', 'mon1_azimuth', 'mon1_9960hz_fm'],
+  'thales_llz_421': ['CRS_DDM', 'CRS_SDM', 'NF_DDM', 'NF_SDM', 'WIDTH_DDM', 'WIDTH_SDM', 'CRS_RF', 'NF_RF'],
   'default': ['Status']
 };
 

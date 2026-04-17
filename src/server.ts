@@ -670,6 +670,22 @@ const app = new Elysia()
                     return { success: false, message: error.message };
                 }
             })
+            // Aggregated Chart Data
+            .get('/:id/chart/aggregated', async ({ params, query, set }) => {
+                try {
+                    const { tf = '24h' } = query;
+                    const fileLogger = require('./utils/fileLogger');
+                    const equipment = await db.getEquipmentById(params.id);
+                    if (!equipment) {
+                        set.status = 404;
+                        return { message: 'Equipment not found' };
+                    }
+                    return await fileLogger.getAggregatedChartData(equipment.name, equipment.id, tf);
+                } catch (error: any) {
+                    set.status = 500;
+                    return { message: error.message };
+                }
+            })
     )
 
     // --- SUP CATEGORY ROUTES ---

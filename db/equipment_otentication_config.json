@@ -18,7 +18,7 @@
     "name": "Source - Localizer",
     "equipt_id": "1775527260954",
     "ip_address": "127.0.0.1",
-    "parsing_id": "dvor_maru_220",
+    "parsing_id": "thales_llz_421",
     "udp_port": "5001"
   },
   {
@@ -64,7 +64,7 @@
     "equipt_id": "2001",
     "name": "SNMP Resource Data",
     "ip_address": "172.20.56.151",
-    "udp_port": "5353",
+    "udp_port": "6005",
     "parsing_id": "snmp_host_resources_01"
   },
   {
