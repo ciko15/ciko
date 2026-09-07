@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const centralDb = require('./central_db');
 
 // --- JSON CONFIG PATHS ---
 const AIRPORT_CONFIG_PATH = path.join(__dirname, 'airport_config.json');
@@ -920,84 +921,111 @@ async function deleteParsingConfig(id) {
 
 // --- SNMP TEMPLATES (FOR CONFIGURATION MENU) ---
 async function getAllSnmpTemplates() {
-  return await readJson(TEMPLATE_CONFIG_PATH);
+  const [rows] = await centralDb.queryWithRetry('SELECT * FROM snmp_templates ORDER BY is_default DESC, name');
+  return rows.map(row => ({
+    ...row,
+    oidMappings: typeof row.oid_mappings === 'string' ? JSON.parse(row.oid_mappings || '{}') : row.oid_mappings,
+    oidBase: row.oid_base,
+    category: row.category,
+    isDefault: row.is_default
+  }));
 }
 
 async function getSnmpTemplateById(id) {
-  const templates = await readJson(TEMPLATE_CONFIG_PATH);
-  return templates.find(t => t.id == id) || null;
+  const [rows] = await centralDb.queryWithRetry('SELECT * FROM snmp_templates WHERE id = ?', [id]);
+  if (!rows[0]) return null;
+  return {
+    ...rows[0],
+    oidMappings: typeof rows[0].oid_mappings === 'string' ? JSON.parse(rows[0].oid_mappings || '{}') : rows[0].oid_mappings,
+    oidBase: rows[0].oid_base,
+    category: rows[0].category,
+    isDefault: rows[0].is_default
+  };
 }
 
 async function createSnmpTemplate(data) {
-  let templates = await readJson(TEMPLATE_CONFIG_PATH);
-  const newTgl = {
-    ...data,
-    id: data.id || `custom_${Date.now()}`,
-    createdAt: new Date().toISOString()
-  };
-  templates.push(newTgl);
-  await writeJson(TEMPLATE_CONFIG_PATH, templates);
-  return newTgl;
+  const newId = data.id || `custom_${Date.now()}`;
+  await centralDb.queryWithRetry(`
+    INSERT INTO snmp_templates (id, name, description, oid_base, oid_mappings, category, is_default)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [newId, data.name, data.description || '', data.oidBase || '', JSON.stringify(data.oidMappings || {}), data.category || '', data.isDefault ? 1 : 0]);
+  
+  return getSnmpTemplateById(newId);
 }
 
 async function updateSnmpTemplate(id, data) {
-  let templates = await readJson(TEMPLATE_CONFIG_PATH);
-  const index = templates.findIndex(t => t.id == id);
-  if (index !== -1) {
-    templates[index] = { ...templates[index], ...data, updatedAt: new Date().toISOString() };
-    await writeJson(TEMPLATE_CONFIG_PATH, templates);
-    return templates[index];
-  }
-  return null;
+  const fields = [];
+  const values = [];
+  
+  if (data.name !== undefined) { fields.push(`name = ?`); values.push(data.name); }
+  if (data.description !== undefined) { fields.push(`description = ?`); values.push(data.description); }
+  if (data.oidBase !== undefined) { fields.push(`oid_base = ?`); values.push(data.oidBase); }
+  if (data.oidMappings !== undefined) { fields.push(`oid_mappings = ?`); values.push(JSON.stringify(data.oidMappings)); }
+  if (data.category !== undefined) { fields.push(`category = ?`); values.push(data.category); }
+  if (data.isDefault !== undefined) { fields.push(`is_default = ?`); values.push(data.isDefault ? 1 : 0); }
+  
+  if (fields.length === 0) return getSnmpTemplateById(id);
+  
+  values.push(id);
+  await centralDb.queryWithRetry(`UPDATE snmp_templates SET ${fields.join(', ')} WHERE id = ?`, values);
+  return getSnmpTemplateById(id);
 }
 
 async function deleteSnmpTemplate(id) {
-  let templates = await readJson(TEMPLATE_CONFIG_PATH);
-  const newList = templates.filter(t => t.id != id);
-  await writeJson(TEMPLATE_CONFIG_PATH, newList);
+  await centralDb.queryWithRetry('DELETE FROM snmp_templates WHERE id = ?', [id]);
   return true;
 }
 
 // --- SUP CATEGORIES ---
 async function getAllSupCategories() {
-  return await readJson(SUP_CATEGORY_PATH);
+  const [rows] = await centralDb.queryWithRetry('SELECT * FROM equipment_templates ORDER BY name');
+  // Group by equipment_type to match the old structure
+  const grouped = {};
+  for (const row of rows) {
+    const cat = row.equipment_type || 'Support';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(row.name);
+  }
+  return Object.keys(grouped).map(cat => ({
+    id: cat,
+    category: cat,
+    sub_categories: grouped[cat]
+  }));
 }
 
 async function getSupCategoriesByCategory(category) {
-  const data = await readJson(SUP_CATEGORY_PATH);
-  if (!category) return data;
-  return data.find(c => c.category === category) || { category, sub_categories: [] };
+  const [rows] = await centralDb.queryWithRetry('SELECT * FROM equipment_templates WHERE equipment_type = ? ORDER BY name', [category]);
+  if (!category) return await getAllSupCategories();
+  return {
+    category: category,
+    sub_categories: rows.map(r => r.name)
+  };
 }
 
 async function createSupCategory(data) {
-  let list = await readJson(SUP_CATEGORY_PATH);
-  const newItem = {
-    id: Date.now(),
-    category: data.category,
-    sub_categories: data.sub_categories || []
-  };
-  list.push(newItem);
-  await writeJson(SUP_CATEGORY_PATH, list);
-  return newItem;
+  const subs = data.sub_categories || [];
+  for (const sub of subs) {
+    await centralDb.queryWithRetry(
+      'INSERT IGNORE INTO equipment_templates (name, equipment_type, parser_config) VALUES (?, ?, ?)',
+      [sub, data.category, '{}']
+    );
+  }
+  return { category: data.category, sub_categories: subs };
 }
 
 async function deleteSupCategory(id) {
-  let data = await readJson(SUP_CATEGORY_PATH);
-  // Support deletion by id or category name
-  const newList = data.filter(c => c.id != id && c.category !== id);
-  await writeJson(SUP_CATEGORY_PATH, newList);
+  await centralDb.queryWithRetry('DELETE FROM equipment_templates WHERE equipment_type = ?', [id]);
   return true;
 }
 
 async function updateSupCategory(category, subCategories) {
-  let data = await readJson(SUP_CATEGORY_PATH);
-  const index = data.findIndex(c => c.category === category);
-  if (index !== -1) {
-    data[index].sub_categories = subCategories;
-  } else {
-    data.push({ category, sub_categories: subCategories });
+  // We can just add missing ones
+  for (const sub of subCategories) {
+    await centralDb.queryWithRetry(
+      'INSERT IGNORE INTO equipment_templates (name, equipment_type, parser_config) VALUES (?, ?, ?)',
+      [sub, category, '{}']
+    );
   }
-  await writeJson(SUP_CATEGORY_PATH, data);
   return true;
 }
 
@@ -1107,14 +1135,35 @@ async function deleteOtenticationByEquipment(equipmentId) {
 
 // --- LIMITATION CONFIGS ---
 async function getAllLimitations() {
-  return await readJson(LIMITATION_CONFIG_PATH);
+  const [rows] = await centralDb.queryWithRetry(`
+    SELECT p.*, t.name as template_name, t.equipment_type as category 
+    FROM template_parameters p
+    LEFT JOIN equipment_templates t ON p.template_id = t.id
+  `);
+  return rows.map(row => ({
+    id: row.id,
+    name: row.label,
+    source: row.source,
+    category: row.category || 'Support',
+    sup_category: row.template_name,
+    value_type: row.unit === '%' ? 'percent' : 'numeric',
+    unit: row.unit,
+    min_alarm_limit: row.alarm_min,
+    max_alarm_limit: row.alarm_max,
+    min_warning_limit: row.warning_min,
+    max_warning_limit: row.warning_max,
+    alv: row.alarm_min,
+    ahv: row.alarm_max,
+    wlv: row.warning_min,
+    whv: row.warning_max
+  }));
 }
 
 async function getLimitationsByEquipment(equipmentId) {
   const equipment = await getEquipmentById(equipmentId);
   if (!equipment) return [];
 
-  const data = await readJson(LIMITATION_CONFIG_PATH, []);
+  const data = await getAllLimitations();
   const targetSup = String(equipment.sup_category || '').toLowerCase();
   return data.filter(l => {
     const limitSup = String(l.sup_category || '').toLowerCase();
@@ -1123,58 +1172,61 @@ async function getLimitationsByEquipment(equipmentId) {
 }
 
 async function createLimitation(data) {
-  console.log('[DB] createLimitation received data:', JSON.stringify(data, null, 2));
-  let list = await readJson(LIMITATION_CONFIG_PATH);
-  const item = {
-    id: Date.now(),
-    name: data.name,
-    category: data.category,
-    sup_category: data.sup_category,
-    value: data.value,
-    value_type: data.value_type || 'numeric', // numeric, string, percent
-    // New descriptive limit fields
-    min_warning_limit: data.min_warning_limit,
-    min_alarm_limit: data.min_alarm_limit,
-    max_warning_limit: data.max_warning_limit,
-    max_alarm_limit: data.max_alarm_limit,
-    // Keep legacy for backward compatibility
-    wlv: data.min_warning_limit || data.wlv,
-    alv: data.min_alarm_limit || data.alv,
-    whv: data.max_warning_limit || data.whv,
-    ahv: data.max_alarm_limit || data.ahv,
-    expected_value: data.expected_value || null
-  };
-  list.push(item);
-  await writeJson(LIMITATION_CONFIG_PATH, list);
-  return item;
+  let templateId = null;
+  if (data.sup_category) {
+    const [tRows] = await centralDb.queryWithRetry('SELECT id FROM equipment_templates WHERE name = ?', [data.sup_category]);
+    if (tRows.length > 0) templateId = tRows[0].id;
+  }
+
+  const unit = data.value_type === 'percent' ? '%' : (data.unit || '');
+  const id = Date.now();
+  await centralDb.queryWithRetry(`
+    INSERT INTO template_parameters 
+    (id, template_id, label, source, unit, alarm_min, alarm_max, warning_min, warning_max)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id, templateId, data.name, data.source || data.name.toLowerCase().replace(/\\s+/g, '_'), unit,
+    data.min_alarm_limit || data.alv || null,
+    data.max_alarm_limit || data.ahv || null,
+    data.min_warning_limit || data.wlv || null,
+    data.max_warning_limit || data.whv || null
+  ]);
+
+  return { id, ...data };
 }
 
 async function updateLimitation(id, data) {
-  console.log(`[DB] updateLimitation received id: ${id}, data:`, JSON.stringify(data, null, 2));
-  let list = await readJson(LIMITATION_CONFIG_PATH);
-  const index = list.findIndex(l => l.id == id || l.equipt_id == id);
+  const fields = [];
+  const values = [];
 
-  if (index !== -1) {
-    // Clean up technical fields from frontend
-    const { configType, configId, configMode, ...cleanData } = data;
+  const { configType, configId, configMode, ...cleanData } = data;
 
-    // Sync legacy fields if new ones are provided
-    if (cleanData.min_warning_limit) cleanData.wlv = cleanData.min_warning_limit;
-    if (cleanData.min_alarm_limit) cleanData.alv = cleanData.min_alarm_limit;
-    if (cleanData.max_warning_limit) cleanData.whv = cleanData.max_warning_limit;
-    if (cleanData.max_alarm_limit) cleanData.ahv = cleanData.max_alarm_limit;
-
-    list[index] = { ...list[index], ...cleanData };
-    await writeJson(LIMITATION_CONFIG_PATH, list);
-    return list[index];
+  if (cleanData.name !== undefined) { fields.push(`label = ?`); values.push(cleanData.name); }
+  if (cleanData.source !== undefined) { fields.push(`source = ?`); values.push(cleanData.source); }
+  if (cleanData.value_type !== undefined || cleanData.unit !== undefined) { 
+    fields.push(`unit = ?`); 
+    values.push(cleanData.value_type === 'percent' ? '%' : (cleanData.unit || '')); 
   }
-  return null;
+
+  const alv = cleanData.min_alarm_limit !== undefined ? cleanData.min_alarm_limit : cleanData.alv;
+  const ahv = cleanData.max_alarm_limit !== undefined ? cleanData.max_alarm_limit : cleanData.ahv;
+  const wlv = cleanData.min_warning_limit !== undefined ? cleanData.min_warning_limit : cleanData.wlv;
+  const whv = cleanData.max_warning_limit !== undefined ? cleanData.max_warning_limit : cleanData.whv;
+
+  if (alv !== undefined) { fields.push(`alarm_min = ?`); values.push(alv); }
+  if (ahv !== undefined) { fields.push(`alarm_max = ?`); values.push(ahv); }
+  if (wlv !== undefined) { fields.push(`warning_min = ?`); values.push(wlv); }
+  if (whv !== undefined) { fields.push(`warning_max = ?`); values.push(whv); }
+
+  if (fields.length === 0) return true;
+
+  values.push(id);
+  await centralDb.queryWithRetry(`UPDATE template_parameters SET ${fields.join(', ')} WHERE id = ?`, values);
+  return { id, ...cleanData };
 }
 
 async function deleteLimitation(id) {
-  let list = await readJson(LIMITATION_CONFIG_PATH);
-  const newList = list.filter(l => l.id != id);
-  await writeJson(LIMITATION_CONFIG_PATH, newList);
+  await centralDb.queryWithRetry('DELETE FROM template_parameters WHERE id = ?', [id]);
 }
 
 // --- USERS ---

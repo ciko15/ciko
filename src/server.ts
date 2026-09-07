@@ -270,19 +270,38 @@ async function checkEquipmentWatchdog() {
 
                 if (item.lastData) {
                     const sourceNames = Object.keys(item.lastData);
-                    const sourceStatuses = sourceNames.map(name => {
+                    const sourceStatuses = await Promise.all(sourceNames.map(async name => {
                         const src = item.lastData[name];
                         const age = now - new Date(src._logged_at).getTime();
                         // Each source has its own age check
-                        if (age > TIMEOUT_MS) return 'Disconnect';
+                        if (age > TIMEOUT_MS) {
+                            const parserId = String(src._parser_id || item.parser_id || '').toLowerCase();
+                            const category = String(item.category || item.sup_category || '').toLowerCase();
+                            
+                            // Bypass ping for Radar and ADSB
+                            if (parserId.includes('radar') || parserId.includes('adsb') || category.includes('radar') || category.includes('adsb')) {
+                                return 'Alarm';
+                            }
+                            
+                            // For regular equipment, try ping
+                            const ipToPing = src._ip || item.ip_address || null;
+                            if (ipToPing) {
+                                try {
+                                    const { pingHost } = require('./utils/network');
+                                    const pingRes = await pingHost(ipToPing, 1);
+                                    if (pingRes && pingRes.alive) return 'Alarm';
+                                } catch (e) {}
+                            }
+                            return 'Disconnect';
+                        }
                         return src._status || 'Normal';
-                    });
+                    }));
 
                     // Rule-based consolidation
                     if (sourceStatuses.length > 0) {
                         const lowerStatuses = sourceStatuses.map(s => String(s).toLowerCase());
                         if (lowerStatuses.some(s => s === 'alert' || s === 'alarm' || s === 'fail' || s === 'critical')) {
-                            finalStatus = 'Alert';
+                            finalStatus = 'Alarm';
                         } else if (lowerStatuses.some(s => s === 'warning')) {
                             finalStatus = 'Warning';
                         } else if (lowerStatuses.every(s => s === 'disconnect' || s === 'offline')) {
@@ -296,8 +315,27 @@ async function checkEquipmentWatchdog() {
                 } else if (item.lastUpdate) {
                     // Fallback for equipment without grouped data
                     const lastUpdate = new Date(item.lastUpdate).getTime();
-                    if (now - lastUpdate > TIMEOUT_MS) finalStatus = 'Disconnect';
-                }
+                    if (now - lastUpdate > TIMEOUT_MS) {
+                        const category = String(item.category || item.sup_category || '').toLowerCase();
+                        if (category.includes('radar') || category.includes('adsb')) {
+                            finalStatus = 'Alarm';
+                        } else {
+                            const ipToPing = item.ip_address || null;
+                            if (ipToPing) {
+                                try {
+                                    const { pingHost } = require('./utils/network');
+                                    const pingRes = await pingHost(ipToPing, 1);
+                                    if (pingRes && pingRes.alive) finalStatus = 'Alarm';
+                                    else finalStatus = 'Disconnect';
+                                } catch (e) {
+                                    finalStatus = 'Disconnect';
+                                }
+                            } else {
+                                finalStatus = 'Disconnect';
+                            }
+                        }
+                    }
+                } // Missing closing brace added here
 
                 // Update only if status changed
                 if (item.status !== finalStatus) {

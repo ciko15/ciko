@@ -72,10 +72,14 @@ function evaluateParameters(parameters, thresholds) {
 
   for (const [paramName, value] of Object.entries(parameters)) {
     const config = thresholds[paramName] || {};
-    const status = checkThreshold(value, config);
+    let status = checkThreshold(value, config);
+    
+    // Force status to never exceed Warning for threshold breaches
+    if (status === 'Alert') status = 'Warning';
+    
     parameterStatuses[paramName] = status;
 
-    if (status === 'Warning' || status === 'Alert') {
+    if (status === 'Warning') {
       triggeredParameters.push(paramName);
     }
 

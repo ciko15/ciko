@@ -114,11 +114,10 @@ function normalizeInterfaceName(name) {
         .trim();
 }
 
-function summarizeInterfaceNames(interfaces, limit = 8) {
+function summarizeInterfaceNames(interfaces) {
     if (!interfaces || interfaces.length === 0) return '—';
-    const names = interfaces.slice(0, limit).map((iface) => normalizeInterfaceName(iface.name));
-    const suffix = interfaces.length > limit ? ` +${interfaces.length - limit} lainnya` : '';
-    return names.join(', ') + suffix;
+    const names = interfaces.map((iface) => normalizeInterfaceName(iface.name));
+    return names.join(', ');
 }
 
 function pickInterfaceName(idx, descrMap, ifNameMap) {
