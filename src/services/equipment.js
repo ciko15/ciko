@@ -276,26 +276,24 @@ class EquipmentService {
             const sourceId = parsedData.source_id || sourceName; // Gunakan ID sebagai penanda utama jika ada
 
             // =========================================================================
-            // FORCE ALARM TO WARNING (Kesepakatan: Parameter out of bounds = Warning)
+            // OVERRIDE STATUS: 
+            // 1. Data kosong melompong -> Wajib Alarm
+            // 2. Data ada isinya tapi Alarm/Alert -> Turunkan jadi Warning
             // =========================================================================
-            if (status === 'Alarm' || status === 'Alert') {
-                let isEmpty = true;
-                // Cek apakah data benar-benar kosong (semua parameter '-')
-                for (const key of Object.keys(parsedData)) {
-                    if (key.startsWith('_') || ['status', 'alarms', 'warnings', 'triggeredParams', 'connectivity', 'reachability'].includes(key)) continue;
-                    const v = parsedData[key];
-                    if (v !== '-' && v !== '—' && v !== null && v !== undefined && v !== '') {
-                        isEmpty = false;
-                        break;
-                    }
+            let isEmpty = true;
+            for (const key of Object.keys(parsedData)) {
+                if (key.startsWith('_') || ['status', 'alarms', 'warnings', 'triggeredParams', 'connectivity', 'reachability'].includes(key)) continue;
+                const v = parsedData[key];
+                if (v !== '-' && v !== '—' && v !== null && v !== undefined && v !== '') {
+                    isEmpty = false;
+                    break;
                 }
-                
-                // Jika ada datanya, turunkan jadi Warning. Jika kosong melompong, tetap Alarm.
-                if (!isEmpty) {
-                    status = 'Warning';
-                } else {
-                    status = 'Alarm';
-                }
+            }
+
+            if (isEmpty) {
+                status = 'Alarm';
+            } else if (status === 'Alarm' || status === 'Alert') {
+                status = 'Warning';
             }
             // =========================================================================
 
