@@ -32,8 +32,17 @@ export async function pingHost(ip: string, timeout: number = 3): Promise<any> {
     const ping = require('ping');
     try {
         const result = await ping.promise.probe(ip, { timeout });
+        
+        // Fix Windows Ping Pitfall:
+        // Kadang "Destination host unreachable" dianggap 0% loss dan alive = true
+        let isAlive = result.alive;
+        const outputText = (result.output || '').toLowerCase();
+        if (outputText.includes('unreachable') || outputText.includes('tidak dapat dijangkau')) {
+            isAlive = false;
+        }
+
         return {
-            alive: result.alive,
+            alive: isAlive,
             time: result.time,
             min: result.min,
             max: result.max,
