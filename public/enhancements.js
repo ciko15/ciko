@@ -238,7 +238,8 @@
         const minWarn = limit.min_warning_limit ? parseFloat(limit.min_warning_limit) : minAlarm;
         const maxWarn = limit.max_warning_limit ? parseFloat(limit.max_warning_limit) : maxAlarm;
 
-        if (numVal < minAlarm || numVal > maxAlarm) return '#ff3355'; // Alarm
+        // User request: "Intinya parameter berapapun itu masukkan warning kan ya."
+        if (numVal < minAlarm || numVal > maxAlarm) return '#ffcc00'; // Force to Warning (#ffcc00)
         if (numVal < minWarn || numVal > maxWarn) return '#ffcc00';   // Warning
         return '#00ff88'; // Normal
     }   // equipmentId → [{...source}]

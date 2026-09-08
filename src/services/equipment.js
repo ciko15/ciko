@@ -293,9 +293,10 @@ class EquipmentService {
 
             const lowerStatus = String(status).toLowerCase();
             if (lowerStatus === 'disconnect') {
-                // Biarkan tetap Disconnect jika jaringan memang terputus (ping gagal)
+                // Biarkan tetap Disconnect dari parser. Watchdog yang akan menentukan
+                // apakah ping benar-benar mati (Alarm) atau hidup tapi no data (Warning).
             } else if (isEmpty) {
-                status = 'Alarm'; // Jaringan hidup, tapi data kosong
+                status = 'Warning'; // Jaringan hidup, tapi data kosong = Warning
             } else if (lowerStatus === 'alarm' || lowerStatus === 'alert') {
                 status = 'Warning'; // Data ada, parameter memburuk -> max Warning
             }

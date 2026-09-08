@@ -295,6 +295,17 @@ const cabangModule = (function () {
 
     function deriveEquipmentStatus(item) {
       if (item && item.lastData && Object.keys(item.lastData).length > 0) {
+        // Evaluate if data is stale (older than 5 minutes)
+        const now = Date.now();
+        const isStale = Object.values(item.lastData).every(src => {
+            if (!src || !src._logged_at) return true;
+            return (now - new Date(src._logged_at).getTime()) > (5 * 60 * 1000);
+        });
+
+        if (isStale) {
+            return String(item.status || 'normal').toLowerCase();
+        }
+
         const sourceStatuses = Object.values(item.lastData).map(src => normalizeSourceStatus(src?._status).toLowerCase());
 
         if (sourceStatuses.some(st => st === 'alarm')) return 'alarm';
