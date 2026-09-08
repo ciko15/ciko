@@ -281,9 +281,10 @@ class EquipmentService {
             // 2. Data ada isinya tapi Alarm/Alert -> Turunkan jadi Warning
             // =========================================================================
             let isEmpty = true;
-            for (const key of Object.keys(parsedData)) {
+            const actualData = parsedData.data || parsedData;
+            for (const key of Object.keys(actualData)) {
                 if (key.startsWith('_') || ['status', 'alarms', 'warnings', 'triggeredParams', 'connectivity', 'reachability'].includes(key)) continue;
-                const v = parsedData[key];
+                const v = actualData[key];
                 if (v !== '-' && v !== '—' && v !== null && v !== undefined && v !== '') {
                     isEmpty = false;
                     break;
