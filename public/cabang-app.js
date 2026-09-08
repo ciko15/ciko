@@ -396,7 +396,11 @@ const cabangModule = (function () {
         if (sources.length > 0) {
           const cardsHtml = sources.map(sourceName => {
             const sourceData = item.lastData[sourceName] || {};
-            const srcStatus = sourceData._status || 'Normal';
+            const _rawStatus = sourceData._status || 'Normal';
+            // Normalize tampilan badge agar selalu rapi (Warning, Alarm, Normal, Disconnect)
+            // Berapapun nilai _status mentah dari DB (termasuk 'WARR', 'ALARM', dll)
+            const _normalizedStatus = normalizeSourceStatus(_rawStatus);
+            const srcStatus = _normalizedStatus; // Gunakan nilai ternormalisasi untuk tampil
             const logDate = sourceData._logged_at ? new Date(sourceData._logged_at) : null;
             const isToday = logDate && logDate.toDateString() === new Date().toDateString();
             const srcTime = logDate
