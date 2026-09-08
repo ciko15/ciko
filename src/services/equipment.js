@@ -291,10 +291,12 @@ class EquipmentService {
                 }
             }
 
-            if (isEmpty) {
-                status = 'Alarm';
+            if (status === 'Disconnect') {
+                // Biarkan tetap Disconnect jika jaringan memang terputus (ping gagal)
+            } else if (isEmpty) {
+                status = 'Alarm'; // Jaringan hidup, tapi data kosong
             } else if (status === 'Alarm' || status === 'Alert') {
-                status = 'Warning';
+                status = 'Warning'; // Data ada, parameter memburuk -> max Warning
             }
             // =========================================================================
 
