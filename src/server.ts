@@ -266,7 +266,10 @@ async function checkEquipmentWatchdog() {
             }
 
             for (const item of equipmentList) {
-                let finalStatus = item.status || 'Normal';
+                // Determine group level consolidated status
+                let finalStatus = 'Unknown';
+                let pingErrorMsgs = [];
+                const equipmentId = String(item.id);
 
                 if (item.lastData) {
                     const sourceNames = Object.keys(item.lastData);
@@ -280,6 +283,7 @@ async function checkEquipmentWatchdog() {
                             
                             // Bypass ping for Radar and ADSB
                             if (parserId.includes('radar') || parserId.includes('adsb') || category.includes('radar') || category.includes('adsb')) {
+                                pingErrorMsgs.push(`${name}: No data (Radar/ADSB bypass)`);
                                 return 'Alarm';
                             }
                             
@@ -289,9 +293,13 @@ async function checkEquipmentWatchdog() {
                                 try {
                                     const { pingHost } = require('./utils/network');
                                     const pingRes = await pingHost(ipToPing, 1);
-                                    if (pingRes && pingRes.alive) return 'Alarm';
+                                    if (pingRes && pingRes.alive) {
+                                        pingErrorMsgs.push(`${name}: Reachable (${pingRes.time || '<1'}ms) but no data`);
+                                        return 'Alarm';
+                                    }
                                 } catch (e) {}
                             }
+                            pingErrorMsgs.push(`${name}: Ping failed or unreachable`);
                             return 'Disconnect';
                         }
                         return src._status || 'Normal';
@@ -319,28 +327,37 @@ async function checkEquipmentWatchdog() {
                         const category = String(item.category || item.sup_category || '').toLowerCase();
                         if (category.includes('radar') || category.includes('adsb')) {
                             finalStatus = 'Alarm';
+                            pingErrorMsgs.push('No data received (Radar/ADSB bypass ping)');
                         } else {
                             const ipToPing = item.ip_address || null;
                             if (ipToPing) {
                                 try {
                                     const { pingHost } = require('./utils/network');
                                     const pingRes = await pingHost(ipToPing, 1);
-                                    if (pingRes && pingRes.alive) finalStatus = 'Alarm';
-                                    else finalStatus = 'Disconnect';
+                                    if (pingRes && pingRes.alive) {
+                                        finalStatus = 'Alarm';
+                                        pingErrorMsgs.push(`Device reachable (${pingRes.time || '<1'}ms) but no data received`);
+                                    } else {
+                                        finalStatus = 'Disconnect';
+                                        pingErrorMsgs.push('Ping failed: Device unreachable');
+                                    }
                                 } catch (e) {
                                     finalStatus = 'Disconnect';
+                                    pingErrorMsgs.push('Ping execution failed');
                                 }
                             } else {
                                 finalStatus = 'Disconnect';
+                                pingErrorMsgs.push('No IP address configured');
                             }
                         }
                     }
-                } // Missing closing brace added here
+                }
 
                 // Update only if status changed
                 if (item.status !== finalStatus) {
                     console.log(`[WATCHDOG] Equipment ${item.name} status changed: ${item.status} -> ${finalStatus}`);
-                    await equipmentService.updateEquipmentStatus(item.id, finalStatus);
+                    const combinedErrorMsg = pingErrorMsgs.length > 0 ? pingErrorMsgs.join(' | ') : null;
+                    await equipmentService.updateEquipmentStatus(item.id, finalStatus, combinedErrorMsg);
                 }
             }
             
