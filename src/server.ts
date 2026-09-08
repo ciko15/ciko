@@ -284,7 +284,7 @@ async function checkEquipmentWatchdog() {
                             // Bypass ping for Radar and ADSB
                             if (parserId.includes('radar') || parserId.includes('adsb') || category.includes('radar') || category.includes('adsb')) {
                                 pingErrorMsgs.push(`${name}: No data (Radar/ADSB bypass)`);
-                                return 'Alarm';
+                                return 'Warning';
                             }
                             
                             // For regular equipment, try ping
@@ -295,12 +295,12 @@ async function checkEquipmentWatchdog() {
                                     const pingRes = await pingHost(ipToPing, 1);
                                     if (pingRes && pingRes.alive) {
                                         pingErrorMsgs.push(`${name}: Reachable (${pingRes.time || '<1'}ms) but no data`);
-                                        return 'Alarm';
+                                        return 'Warning';
                                     }
                                 } catch (e) {}
                             }
                             pingErrorMsgs.push(`${name}: Ping failed or unreachable`);
-                            return 'Disconnect';
+                            return 'Alarm';
                         }
                         return src._status || 'Normal';
                     }));
@@ -326,7 +326,7 @@ async function checkEquipmentWatchdog() {
                     if (now - lastUpdate > TIMEOUT_MS) {
                         const category = String(item.category || item.sup_category || '').toLowerCase();
                         if (category.includes('radar') || category.includes('adsb')) {
-                            finalStatus = 'Alarm';
+                            finalStatus = 'Warning';
                             pingErrorMsgs.push('No data received (Radar/ADSB bypass ping)');
                         } else {
                             const ipToPing = item.ip_address || null;
@@ -335,18 +335,18 @@ async function checkEquipmentWatchdog() {
                                     const { pingHost } = require('./utils/network');
                                     const pingRes = await pingHost(ipToPing, 1);
                                     if (pingRes && pingRes.alive) {
-                                        finalStatus = 'Alarm';
+                                        finalStatus = 'Warning';
                                         pingErrorMsgs.push(`Device reachable (${pingRes.time || '<1'}ms) but no data received`);
                                     } else {
-                                        finalStatus = 'Disconnect';
+                                        finalStatus = 'Alarm';
                                         pingErrorMsgs.push('Ping failed: Device unreachable');
                                     }
                                 } catch (e) {
-                                    finalStatus = 'Disconnect';
+                                    finalStatus = 'Alarm';
                                     pingErrorMsgs.push('Ping execution failed');
                                 }
                             } else {
-                                finalStatus = 'Disconnect';
+                                finalStatus = 'Alarm';
                                 pingErrorMsgs.push('No IP address configured');
                             }
                         }

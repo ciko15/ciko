@@ -291,11 +291,12 @@ class EquipmentService {
                 }
             }
 
-            if (status === 'Disconnect') {
+            const lowerStatus = String(status).toLowerCase();
+            if (lowerStatus === 'disconnect') {
                 // Biarkan tetap Disconnect jika jaringan memang terputus (ping gagal)
             } else if (isEmpty) {
                 status = 'Alarm'; // Jaringan hidup, tapi data kosong
-            } else if (status === 'Alarm' || status === 'Alert') {
+            } else if (lowerStatus === 'alarm' || lowerStatus === 'alert') {
                 status = 'Warning'; // Data ada, parameter memburuk -> max Warning
             }
             // =========================================================================
