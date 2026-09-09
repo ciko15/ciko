@@ -311,7 +311,7 @@ const cabangModule = (function () {
         if (sourceStatuses.some(st => st === 'alarm')) return 'alarm';
         if (sourceStatuses.some(st => st === 'warning')) return 'warning';
         if (sourceStatuses.every(st => st === 'disconnect')) return 'disconnect';
-        if (sourceStatuses.some(st => st === 'disconnect')) return 'warning';
+        if (sourceStatuses.some(st => st === 'disconnect')) return 'disconnect';
         return 'normal';
       }
 
@@ -427,7 +427,7 @@ const cabangModule = (function () {
                     <span class="status-dot ${statusClass}" style="background-color: ${dotColor}"></span>
                     <span class="source-name">${sourceName}</span>
                   </div>
-                  <span class="status-pill ${statusClass}">${srcStatus}</span>
+                  <span class="status-pill ${statusClass}">${srcStatus === 'Alarm' ? 'Offline' : srcStatus}</span>
                 </div>
                 <div class="source-card-footer">
                   <span class="update-label"><i class="far fa-clock"></i></span>

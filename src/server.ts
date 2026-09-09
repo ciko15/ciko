@@ -254,7 +254,7 @@ async function checkEquipmentWatchdog() {
         const limit = 200; // Process in chunks to save memory
         let hasMore = true;
         const now = Date.now();
-        const TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes
+        const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
         while (hasMore) {
             const result = await db.getAllEquipment({ includeData: true, isActive: true, limit, page });
@@ -284,7 +284,7 @@ async function checkEquipmentWatchdog() {
                             // Bypass ping for Radar and ADSB
                             if (parserId.includes('radar') || parserId.includes('adsb') || category.includes('radar') || category.includes('adsb')) {
                                 pingErrorMsgs.push(`${name}: No data (Radar/ADSB bypass)`);
-                                return 'Warning';
+                                return 'Disconnect';
                             }
                             
                             // For regular equipment, try ping
@@ -295,7 +295,7 @@ async function checkEquipmentWatchdog() {
                                     const pingRes = await pingHost(ipToPing, 1);
                                     if (pingRes && pingRes.alive) {
                                         pingErrorMsgs.push(`${name}: Reachable (${pingRes.time || '<1'}ms) but no data`);
-                                        return 'Warning';
+                                        return 'Disconnect';
                                     }
                                 } catch (e) {}
                             }
@@ -315,7 +315,7 @@ async function checkEquipmentWatchdog() {
                         } else if (lowerStatuses.every(s => s === 'disconnect' || s === 'offline')) {
                             finalStatus = 'Disconnect';
                         } else if (lowerStatuses.some(s => s === 'disconnect' || s === 'offline')) {
-                            finalStatus = 'Warning';
+                            finalStatus = 'Disconnect';
                         } else {
                             finalStatus = 'Normal';
                         }
@@ -326,7 +326,7 @@ async function checkEquipmentWatchdog() {
                     if (now - lastUpdate > TIMEOUT_MS) {
                         const category = String(item.category || item.sup_category || '').toLowerCase();
                         if (category.includes('radar') || category.includes('adsb')) {
-                            finalStatus = 'Warning';
+                            finalStatus = 'Disconnect';
                             pingErrorMsgs.push('No data received (Radar/ADSB bypass ping)');
                         } else {
                             const ipToPing = item.ip_address || null;
@@ -335,7 +335,7 @@ async function checkEquipmentWatchdog() {
                                     const { pingHost } = require('./utils/network');
                                     const pingRes = await pingHost(ipToPing, 1);
                                     if (pingRes && pingRes.alive) {
-                                        finalStatus = 'Warning';
+                                        finalStatus = 'Disconnect';
                                         pingErrorMsgs.push(`Device reachable (${pingRes.time || '<1'}ms) but no data received`);
                                     } else {
                                         finalStatus = 'Alarm';
@@ -648,6 +648,50 @@ const app = new Elysia()
             }
         }, { beforeHandle: authorize(['superadmin', 'admin']) })
     )
+
+    // API Get Available Parameters for UI Dropdown (by Sub-Category)
+    .get('/api/limitations/available-parameters', async ({ query, set }) => {
+        try {
+            const supCategory = query.sup_category;
+            const paramsList = new Set<string>();
+
+            // Find all equipments in this sub-category
+            const equipments = await db.getAllEquipment();
+            const relevantEquips = equipments.filter((e: any) => 
+                !supCategory || e.sup_category === supCategory || supCategory === 'all'
+            );
+
+            for (const equipment of relevantEquips) {
+                // Check latest log
+                const latestLog = await db.getLatestEquipmentLog(equipment.id);
+                if (latestLog && latestLog.data) {
+                    const actualData = latestLog.data.data || latestLog.data;
+                    for (const key of Object.keys(actualData)) {
+                        if (key.startsWith('_') || ['status', 'alarms', 'warnings', 'triggeredParams', 'connectivity', 'reachability', 'error'].includes(key)) continue;
+                        const valObj = actualData[key];
+                        if (valObj === null || valObj === undefined || valObj === '-' || valObj === '—') continue;
+                        paramsList.add(key);
+                    }
+                }
+
+                // Check templates
+                if (equipment.templateId) {
+                    const config = await db.getParsingConfigById(equipment.templateId);
+                    if (config && config.template_parameters && Array.isArray(config.template_parameters)) {
+                        config.template_parameters.forEach((p: any) => {
+                            if (p.name) paramsList.add(p.name);
+                        });
+                    }
+                }
+            }
+
+            return Array.from(paramsList).sort();
+        } catch (error: any) {
+            console.error('[API] Error fetching available parameters:', error);
+            set.status = 500;
+            return { error: 'Failed to fetch available parameters' };
+        }
+    })
 
     // Public Equipment Stats
     .get('/api/equipment/stats', async () => {

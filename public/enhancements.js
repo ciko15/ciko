@@ -198,8 +198,14 @@
     }
 
     // Centralized color/threshold logic using limitation_config.json
-    function getLimitColor(supCategory, label, value) {
+    function getLimitColor(supCategory, label, value, rowData = {}) {
         if (value === null || value === undefined || value === '—' || value === '-') return '#4a7a9a';
+        
+        // 1. Prioritize Injected Metadata (from Backend Telemetry)
+        if (rowData._triggered_alarms && rowData._triggered_alarms.includes(label)) return '#ff3355';
+        if (rowData._triggered_warnings && rowData._triggered_warnings.includes(label)) return '#ffcc00';
+
+        // 2. Fallback to Local Frontend Evaluation (for legacy or cached scenarios)
         if (!window.limitationsCache || window.limitationsCache.length === 0) return '#e8f4ff';
 
         const cleanLabel = normalizeLimitLabel(label);
@@ -233,15 +239,14 @@
 
         if (!limit) return '#e8f4ff';
 
-        const minAlarm = limit.min_alarm_limit ? parseFloat(limit.min_alarm_limit) : -Infinity;
-        const maxAlarm = limit.max_alarm_limit ? parseFloat(limit.max_alarm_limit) : Infinity;
-        const minWarn = limit.min_warning_limit ? parseFloat(limit.min_warning_limit) : minAlarm;
-        const maxWarn = limit.max_warning_limit ? parseFloat(limit.max_warning_limit) : maxAlarm;
+        const minAlarm = limit.min_alarm_limit !== null && limit.min_alarm_limit !== undefined && limit.min_alarm_limit !== '' ? parseFloat(limit.min_alarm_limit) : -Infinity;
+        const maxAlarm = limit.max_alarm_limit !== null && limit.max_alarm_limit !== undefined && limit.max_alarm_limit !== '' ? parseFloat(limit.max_alarm_limit) : Infinity;
+        const minWarn = limit.min_warning_limit !== null && limit.min_warning_limit !== undefined && limit.min_warning_limit !== '' ? parseFloat(limit.min_warning_limit) : minAlarm;
+        const maxWarn = limit.max_warning_limit !== null && limit.max_warning_limit !== undefined && limit.max_warning_limit !== '' ? parseFloat(limit.max_warning_limit) : maxAlarm;
 
-        // User request: "Intinya parameter berapapun itu masukkan warning kan ya."
-        if (numVal < minAlarm || numVal > maxAlarm) return '#ffcc00'; // Force to Warning (#ffcc00)
-        if (numVal < minWarn || numVal > maxWarn) return '#ffcc00';   // Warning
-        return '#00ff88'; // Normal
+        if (numVal < minAlarm || numVal > maxAlarm) return '#ff3355'; // Alarm is Red
+        if (numVal < minWarn || numVal > maxWarn) return '#ffcc00';   // Pre-Alarm (Warning) is Yellow
+        return '#e8f4ff'; // Normal is White
     }   // equipmentId → [{...source}]
 
     // ── Wait until cabang-app renders ────────────────────────────────────────
@@ -878,7 +883,7 @@
         }
 
         document.getElementById('srcDetailStatus').innerHTML =
-            pingBadge + `<span style="font-size:11px;font-weight:bold;padding:3px 10px;border-radius:3px;background:${statusColors[status]}22;color:${statusColors[status]};border:1px solid ${statusColors[status]}">${status}</span>`;
+            pingBadge + `<span style="font-size:11px;font-weight:bold;padding:3px 10px;border-radius:3px;background:${statusColors[status]}22;color:${statusColors[status]};border:1px solid ${statusColors[status]}">${status === 'Alarm' ? 'Offline' : status}</span>`;
 
         const body = document.getElementById('srcDetailBody');
 
@@ -946,7 +951,7 @@
                     <i class="fas fa-broadcast-tower" style="color:${isRx ? '#00d4ff' : '#e8a000'};font-size:12px;"></i>
                     <span style="font-size:12px;font-weight:bold;color:${isRx ? '#00d4ff' : '#e8a000'};flex:1;">${radioName}</span>
                     <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${isRx ? '#001a33' : '#1a1000'};color:${isRx ? '#00d4ff' : '#e8a000'};border:1px solid ${isRx ? '#00d4ff' : '#e8a000'};font-weight:bold;">${radioType}</span>
-                    <span style="font-size:10px;font-weight:bold;padding:2px 8px;border-radius:4px;background:${sc}22;color:${sc};border:1px solid ${sc};">${status}</span>
+                    <span style="font-size:10px;font-weight:bold;padding:2px 8px;border-radius:4px;background:${sc}22;color:${sc};border:1px solid ${sc};">${status === 'Alarm' ? 'Offline' : status}</span>
                     <span style="font-size:9px;color:#3a6a8a;">${loggedAt}</span>
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;padding:10px 12px;background:#080f1e;">
@@ -1375,7 +1380,7 @@
                     ['Tegangan VLL Avg (V)', fn(data.VLL_avg, 1), '#e8f4ff'],
                     ['Frekuensi (Hz)', fn(data.HZ, 2), getLimitColor(sup, 'Frequency', data.HZ)],
                     ['Power Factor', fn(data.PF, 3), getLimitColor(sup, 'Power Factor', Math.abs(data.PF || 0))],
-                    ['Alarm', (data.alarmDetail && data.alarmDetail.length > 0) ? data.alarmDetail.join(' | ') : 'Tidak Ada', data.alarmDetail && data.alarmDetail.length > 0 ? '#ff3355' : '#00ff88'],
+                    ['Offline', (data.alarmDetail && data.alarmDetail.length > 0) ? data.alarmDetail.join(' | ') : 'Tidak Ada', data.alarmDetail && data.alarmDetail.length > 0 ? '#ff3355' : '#00ff88'],
                 ]
             });
 
@@ -1562,9 +1567,9 @@
                 title: 'INTERFACE', params: [
                     ['Total Interface', formatSnmpMetricValue('interface_count', data.interface_count), '#e8f4ff'],
                     ['Interface Up', formatSnmpMetricValue('active_interface_count', data.active_interface_count), '#00ff88'],
-                    ['Interface Down', formatSnmpMetricValue('down_interface_count', data.down_interface_count), '#ffcc00'],
+                    ['Interface Down', formatSnmpMetricValue('down_interface_count', data.down_interface_count), getLimitColor(data.sup_category || 'Switch', 'Interface Down', data.down_interface_count, data)],
                     ['Port Aktif', data.active_interfaces_summary || '—', '#00ff88'],
-                    ['Port Tidak Aktif', data.down_interfaces_summary || '—', '#ffcc00'],
+                    ['Port Tidak Aktif', data.down_interfaces_summary || '—', getLimitColor(data.sup_category || 'Switch', 'Port Tidak Aktif', data.down_interface_count, data)],
                     ['Top Interface', data.top_interface_name || '—', '#00d4ff'],
                     ['Status Top Interface', data.top_interface_status || '—', '#e8f4ff'],
                     ['In Octets', formatSnmpMetricValue('top_interface_in_octets', data.top_interface_in_octets), '#e8f4ff'],

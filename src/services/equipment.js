@@ -277,8 +277,8 @@ class EquipmentService {
 
             // =========================================================================
             // OVERRIDE STATUS: 
-            // 1. Data kosong melompong -> Wajib Alarm
-            // 2. Data ada isinya tapi Alarm/Alert -> Turunkan jadi Warning
+            // 1. Data kosong melompong -> Wajib Warning (karena jaringan mungkin hidup tapi no data)
+            // 2. Evaluasi Alarm Limits (Threshold) dari database
             // =========================================================================
             let isEmpty = true;
             const actualData = parsedData.data || parsedData;
@@ -292,14 +292,77 @@ class EquipmentService {
             }
 
             const lowerStatus = String(status).toLowerCase();
+            let finalStatus = 'Normal';
+
             if (lowerStatus === 'disconnect') {
-                // Biarkan tetap Disconnect dari parser. Watchdog yang akan menentukan
-                // apakah ping benar-benar mati (Alarm) atau hidup tapi no data (Warning).
+                finalStatus = 'Disconnect';
             } else if (isEmpty) {
-                status = 'Warning'; // Jaringan hidup, tapi data kosong = Warning
-            } else if (lowerStatus === 'alarm' || lowerStatus === 'alert') {
-                status = 'Warning'; // Data ada, parameter memburuk -> max Warning
+                finalStatus = 'Disconnect'; // Jaringan hidup, tapi data kosong = Disconnect
+            } else {
+                // Evaluasi Threshold Limits
+                const limitations = await this.db.getLimitationsByEquipment(equipmentId);
+                let hasAlarm = false;
+                let hasWarning = false;
+                const triggeredAlarms = [];
+                const triggeredWarnings = [];
+
+                if (limitations && Array.isArray(limitations) && limitations.length > 0) {
+                    for (const key of Object.keys(actualData)) {
+                        if (key.startsWith('_') || ['status', 'alarms', 'warnings', 'triggeredParams', 'connectivity', 'reachability'].includes(key)) continue;
+                        
+                        const valObj = actualData[key];
+                        if (valObj === null || valObj === undefined || valObj === '-' || valObj === '—') continue;
+                        const value = typeof valObj === 'object' && valObj !== null ? valObj.value : valObj;
+                        const numVal = parseFloat(value);
+                        if (isNaN(numVal)) continue;
+
+                        const cleanKey = key.split('_').pop().toLowerCase();
+                        
+                        const limit = limitations.find(l => {
+                            const limitName = (l.name || '').toLowerCase();
+                            const limitSource = (l.source || '').toLowerCase();
+                            const rawKey = key.toLowerCase();
+                            
+                            // Check exact match on source or name first
+                            if (limitSource && (rawKey === limitSource || cleanKey === limitSource)) return true;
+                            if (limitName === rawKey || limitName === cleanKey) return true;
+                            
+                            // Prevent single-letter matches like "c" in "Pulse Spacing"
+                            if (cleanKey.length <= 2) return false;
+                            
+                            // Fallback to substring matching for descriptive names
+                            return limitName.includes(cleanKey) || cleanKey.includes(limitName);
+                        });
+
+                        if (limit) {
+                            const minAlarm = limit.min_alarm_limit !== null && limit.min_alarm_limit !== undefined && limit.min_alarm_limit !== '' ? parseFloat(limit.min_alarm_limit) : -Infinity;
+                            const maxAlarm = limit.max_alarm_limit !== null && limit.max_alarm_limit !== undefined && limit.max_alarm_limit !== '' ? parseFloat(limit.max_alarm_limit) : Infinity;
+                            const minWarn = limit.min_warning_limit !== null && limit.min_warning_limit !== undefined && limit.min_warning_limit !== '' ? parseFloat(limit.min_warning_limit) : minAlarm;
+                            const maxWarn = limit.max_warning_limit !== null && limit.max_warning_limit !== undefined && limit.max_warning_limit !== '' ? parseFloat(limit.max_warning_limit) : maxAlarm;
+
+                            if (numVal < minAlarm || numVal > maxAlarm) {
+                                hasAlarm = true;
+                                triggeredAlarms.push(key);
+                            } else if (numVal < minWarn || numVal > maxWarn) {
+                                hasWarning = true;
+                                triggeredWarnings.push(key);
+                            }
+                        }
+                    }
+                }
+
+                if (hasAlarm) {
+                    finalStatus = 'Alarm';
+                } else if (hasWarning) {
+                    finalStatus = 'Warning';
+                }
+                
+                // Inject metadata for frontend syncing
+                actualData._triggered_alarms = triggeredAlarms;
+                actualData._triggered_warnings = triggeredWarnings;
             }
+            
+            status = finalStatus;
             // =========================================================================
 
             const gateDecision = this.statusGate.evaluate(
@@ -319,7 +382,7 @@ class EquipmentService {
                 return;
             }
 
-            const finalStatus = gateDecision.status;
+            const finalGateStatus = gateDecision.status;
 
             // --- GLOBAL TELEMETRY MERGER & DEBOUNCER ---
             const cacheKey = `${equipmentId}:${sourceName}`;
@@ -354,7 +417,7 @@ class EquipmentService {
                     const datalog = {
                         equipmentId,
                         equipment_name: equipName,
-                        status: finalStatus,
+                        status: finalGateStatus,
                         data: { ...cache.mergedData },
                         source: sourceName,
                         source_id: sourceId,
@@ -378,7 +441,7 @@ class EquipmentService {
                     const emsDatalog = {
                         equipmentId,
                         equipment_name: equipName,
-                        status: finalStatus,
+                        status: finalGateStatus,
                         data: { ...cache.mergedData },
                         source: sourceName,
                         source_id: sourceId,

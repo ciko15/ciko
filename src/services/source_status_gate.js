@@ -21,7 +21,7 @@ function normalizeStatus(status) {
     }
 
     if (lower === 'warning' || lower === 'warn' || lower === 'stale') {
-        return 'Warning';
+        return 'Disconnect';
     }
 
     return value || 'Normal';
@@ -111,7 +111,7 @@ class SourceStatusGate {
             if (confirmDisconnect && state.status !== null && state.status !== 'Disconnect' && timeSinceLastSuccess < 120000) {
                 return {
                     shouldEmit: false,
-                    status: state.status || 'Warning',
+                    status: state.status || 'Disconnect',
                     reason: 'disconnect-not-confirmed',
                     state
                 };
