@@ -297,7 +297,7 @@ const cabangModule = (function () {
       if (item && item.lastData && Object.keys(item.lastData).length > 0) {
         // Evaluate if data is stale (older than 5 minutes)
         const now = Date.now();
-        const isStale = Object.values(item.lastData).every(src => {
+        const isStale = Object.values(item.lastData).some(src => {
             if (!src || !src._logged_at) return true;
             return (now - new Date(src._logged_at).getTime()) > (5 * 60 * 1000);
         });
@@ -317,7 +317,7 @@ const cabangModule = (function () {
 
       const fallback = String(item?.status || 'offline').toLowerCase();
       return ['normal', 'alarm', 'alert', 'warning', 'offline', 'disconnect'].includes(fallback)
-        ? (fallback === 'disconnect' ? 'offline' : (fallback === 'alert' ? 'alarm' : fallback))
+        ? (fallback === 'disconnect' ? 'disconnect' : (fallback === 'alert' ? 'alarm' : fallback))
         : 'offline';
     }
 
@@ -345,7 +345,6 @@ const cabangModule = (function () {
     if (currentStatusFilter) {
       let filterVal = String(currentStatusFilter).toLowerCase();
       if (filterVal === 'alert') filterVal = 'alarm';
-      if (filterVal === 'disconnect') filterVal = 'offline';
 
       filtered = filtered.filter(e => {
         const normalized = window.normalizeStatus
